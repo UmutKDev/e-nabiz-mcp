@@ -9,7 +9,8 @@ E-Nabız (T.C. Sağlık Bakanlığı **Kişisel Sağlık Sistemi**) verilerinize
 
 ## Durum
 
-🟢 Çekirdek çalışıyor: **37 tool / 20 veri alanı**, salt-okunur. İlerleme:
+🟢 Çekirdek çalışıyor: **43 tool / 20 veri alanı**. Sağlık verisi salt-okunur;
+yazma yalnız MHRS randevu alma/iptalinde (iki adımlı onaylı). İlerleme:
 [`docs/STATUS.md`](docs/STATUS.md).
 
 ## Amaç ve iyi niyet beyanı
@@ -25,8 +26,9 @@ Bu bir niyet beyanından ibaret olmasın diye, her madde kodda doğrulanabilir:
 | İlke | Kodda karşılığı |
 |---|---|
 | **Yalnızca kendi veriniz** | Kimlik bilgileri yalnız `.env`'den okunur, tool argümanı değildir (LLM bağlamına hiç girmez). Başka bir hesaba erişecek bir yol yoktur — portal zaten kendi TC kimliğinize gelen SMS'i ister. |
-| **Salt-okunur** | Hiçbir tool sağlık verinize yazmaz: e-Nabız'ın yazma uçlarına (`/Sil`, `/Kaydet`, `/Iptal` …) dokunulmaz. Bu bir söz değil, test edilen bir invaryant — keşif tarayıcısı bir yazma ucuna dokunursa suite kasten patlar (`tests/test_discover_scan.py:45`). Randevu tool'ları (e-Nabız ve MHRS) randevu **almaz/iptal etmez**. MHRS tarafında ayrıca bir **çalışma-zamanı kapısı** var: yazma sınıfı bir uca gidilirse istek `WriteNotAllowed` ile durur. |
-| **Dürüst tool anotasyonları** | 37 tool'un 35'i `readOnlyHint: True`. İşaretlenmeyen 2'si `login_start`/`login_verify` — çünkü gerçekten yan etkileri var (telefonunuza SMS gider, oturum dosyası yazılır). Her şeye "salt-okunur" damgası vurulmadı. |
+| **Sağlık veriniz salt-okunur** | Hiçbir tool sağlık verinize yazmaz: e-Nabız'ın yazma uçlarına (`/Sil`, `/Kaydet`, `/Iptal` …) dokunulmaz. Bu bir söz değil, test edilen bir invaryant — keşif tarayıcısı bir yazma ucuna dokunursa suite kasten patlar (`tests/test_discover_scan.py:45`). |
+| **Randevu yazması sınırlı ve onaylı** | MHRS randevu **alabilir ve iptal edebilir** — projenin tek yazma yüzeyi (giriş dışında). Tek adımda olmaz: `book_prepare` slotu sunucuda doğrulayıp `confirm_token` döner, `book_confirm` alır. Token yalnız doğrulanmış slot için üretilir ve süreç belleğinde tutulur, yani **model bir slot id uydurup size randevu yazamaz**. İptal `confirm=True` ister. Ayrıca çalışma-zamanı kapısı: yazma sınıfı bir uca `allow_write=True` demeden gidilirse istek `WriteNotAllowed` ile durur. |
+| **Dürüst tool anotasyonları** | 43 tool'un 37'si `readOnlyHint: True`. İşaretlenmeyen 6'sı: `login_start`/`login_verify` (telefonunuza SMS gider, oturum yazılır) ve 4 MHRS randevu tool'u (gerçekten yazarlar). `book_prepare` bile `False` — çünkü MHRS o çağrıda slotu kilitliyor olabilir. Her şeye "salt-okunur" damgası vurulmadı. |
 | **Güvenlik kontrolleri atlatılmaz** | reCAPTCHA çözülmez, SMS OTP kaldırılmaz veya kırılmaz — kod **her zaman** sizin kayıtlı telefonunuza gider ve giriş insan-döngüdedir. Otomasyon, kodu elle girmenin yerine geçer; kontrolün kendisini ortadan kaldırmaz. |
 | **Veri sizde kalır** | Yalnız yerel `stdio`. Harici API, telemetri, analytics yok. PDF'ler diskinize `chmod 600` ile iner; içerik LLM'e verilmez, yalnız `{saved_path, byte_size, sha256, content_type}` döner. |
 | **Portala saygı** | İstekler arası hız sınırı (`ENABIZ_MIN_INTERVAL`, varsayılan 0.5 sn) — sunucuya yük bindirmemek için. Toplu/hızlı veri çekme aracı değildir. |
@@ -199,7 +201,7 @@ yolları elle yazın:
 olarak saklanır ve süresi (~30–60 dk) dolana dek yeniden kullanılır. Oturum düşerse veri
 tool'ları `error: "auth_required"` döner; yeniden giriş yapın.
 
-## Tool'lar (37)
+## Tool'lar (43)
 
 **Oturum:** `enabiz_login_start` · `enabiz_login_verify` · `enabiz_session_status`
 
@@ -221,17 +223,28 @@ tool'ları `error: "auth_required"` döner; yeniden giriş yapın.
 **Ziyaret & randevu:** `enabiz_list_hospital_visits` · `enabiz_get_visit_detail` ·
 `enabiz_list_appointments` (salt-okunur; almaz/iptal etmez)
 
-**MHRS (randevu sistemi):** `enabiz_mhrs_list_provinces` · `enabiz_mhrs_list_districts` ·
-`enabiz_mhrs_list_clinics` · `enabiz_mhrs_list_upcoming` · `enabiz_mhrs_list_history`
+**MHRS — arama (salt-okunur):** `enabiz_mhrs_list_provinces` · `enabiz_mhrs_list_districts` ·
+`enabiz_mhrs_list_clinics` · `enabiz_mhrs_list_upcoming` · `enabiz_mhrs_list_history` ·
+`enabiz_mhrs_search_institutions` · `enabiz_mhrs_search_slots`
+
+**MHRS — randevu (YAZMA):** `enabiz_mhrs_book_prepare` → `enabiz_mhrs_book_confirm` ·
+`enabiz_mhrs_book_cancel_prepare` · `enabiz_mhrs_cancel`
 
 > MHRS (`prd.mhrs.gov.tr`) e-Nabız'dan **ayrı bir sistemdir**; e-Nabız'ın "Randevu Al"
 > düğmesinin arkasındaki SSO devriyle bağlanılır. `enabiz_list_appointments` e-Nabız'ın
 > HTML tablosunu okur; MHRS tool'ları API'nin kendisini okur ve `hrn` (hasta randevu
 > numarası) döndürür — tabloda olmayan, iptal için gereken anahtar.
 >
-> **Bu tool'lar da randevu almaz/iptal etmez** (hepsi `readOnlyHint: True`). Randevu
-> alma iki-adımlı onayla ayrı bir fazda gelecek; bkz. [`docs/STATUS.md`](docs/STATUS.md)
-> ve [`docs/notes/decisions.md`](docs/notes/decisions.md) D7.
+> **Randevu alma/iptal iki adımlıdır.** `book_prepare(slot_id)` yazmaz — slotu sunucuda
+> doğrular ve onay özeti + `confirm_token` döner; randevuyu `book_confirm(token)` alır.
+> Gerekçe: yanlış randevunun bedeli gerçek — randevusuna gitmeyen ve iptal etmeyen kişi
+> aynı branştan **15 gün** randevu alamaz (saglik.gov.tr TR,94138). (Para cezası iddiası
+> yalandır; AA Teyit "Yanlış" damgalı.) Tek adımlı bir `book(slot_id)` tool'unda modelin
+> uydurduğu bir slot id size gerçek bir branş yasağı yazdırabilirdi. Bkz.
+> [`docs/notes/decisions.md`](docs/notes/decisions.md) D7.
+>
+> **Slot aramayı döngüye sokmayın:** MHRS aşırı sorguyu `RNDS1010` ile karşılar ve
+> reCAPTCHA ister; captcha çözülmediği için tekrar denemek yalnız eşiği derinleştirir.
 
 **Profil & idari:** `enabiz_get_profile` · `enabiz_list_insurance` ·
 `enabiz_list_materials_devices` · `enabiz_list_emergency_notes`
@@ -239,7 +252,7 @@ tool'ları `error: "auth_required"` döner; yeniden giriş yapın.
 **Belge indirme:** `enabiz_download_document(kind=...)` — `lab` · `pathology` ·
 `discharge` · `radiology` PDF'lerini tek uçtan indirir.
 
-> Tüm veri tool'ları **salt-okunur**. PDF tool'ları dosyayı `ENABIZ_DOWNLOAD_DIR`'e
+> Tüm e-Nabız veri tool'ları **salt-okunur**. PDF tool'ları dosyayı `ENABIZ_DOWNLOAD_DIR`'e
 > (varsayılan `~/.config/enabiz-mcp/downloads`, `chmod 600`) kaydeder ve içerik yerine
 > `{saved_path, byte_size, sha256, content_type}` döner.
 

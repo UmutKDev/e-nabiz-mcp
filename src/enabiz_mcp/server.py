@@ -23,7 +23,9 @@ from .tools import (
     labs,
     medications,
     mhrs_appointments,
+    mhrs_booking,
     mhrs_search,
+    mhrs_slots,
     pathology,
     prescription_types,
     prescriptions,
@@ -118,6 +120,9 @@ profile.register(mcp)
 # (hasta randevu numarası), tabloda yok, iptalin anahtarı. Şu an hepsi salt-okunur.
 mhrs_search.register(mcp)
 mhrs_appointments.register(mcp)
+mhrs_slots.register(mcp)
+# YAZMA — projenin tek yazma yüzeyi (login dışında). D7.
+mhrs_booking.register(mcp)
 
 # İdari + belge indirme
 administrative.register(mcp)
