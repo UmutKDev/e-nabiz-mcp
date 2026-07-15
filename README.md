@@ -9,7 +9,7 @@ E-Nabız (T.C. Sağlık Bakanlığı **Kişisel Sağlık Sistemi**) verilerinize
 
 ## Durum
 
-🟢 Çekirdek çalışıyor: **32 tool / 19 veri alanı**, salt-okunur. İlerleme:
+🟢 Çekirdek çalışıyor: **37 tool / 20 veri alanı**, salt-okunur. İlerleme:
 [`docs/STATUS.md`](docs/STATUS.md).
 
 ## Amaç ve iyi niyet beyanı
@@ -25,8 +25,8 @@ Bu bir niyet beyanından ibaret olmasın diye, her madde kodda doğrulanabilir:
 | İlke | Kodda karşılığı |
 |---|---|
 | **Yalnızca kendi veriniz** | Kimlik bilgileri yalnız `.env`'den okunur, tool argümanı değildir (LLM bağlamına hiç girmez). Başka bir hesaba erişecek bir yol yoktur — portal zaten kendi TC kimliğinize gelen SMS'i ister. |
-| **Salt-okunur** | Kodda hiçbir yazma ucu (`/Sil`, `/Kaydet`, `/Iptal` …) yok. Bu bir söz değil, test edilen bir invaryant: keşif tarayıcısı bir yazma ucuna dokunursa suite kasten patlar (`tests/test_discover_scan.py:45`). Randevu tool'u randevu **almaz/iptal etmez**. |
-| **Dürüst tool anotasyonları** | 32 tool'un 30'u `readOnlyHint: True`. İşaretlenmeyen 2'si `login_start`/`login_verify` — çünkü gerçekten yan etkileri var (telefonunuza SMS gider, oturum dosyası yazılır). Her şeye "salt-okunur" damgası vurulmadı. |
+| **Salt-okunur** | Hiçbir tool sağlık verinize yazmaz: e-Nabız'ın yazma uçlarına (`/Sil`, `/Kaydet`, `/Iptal` …) dokunulmaz. Bu bir söz değil, test edilen bir invaryant — keşif tarayıcısı bir yazma ucuna dokunursa suite kasten patlar (`tests/test_discover_scan.py:45`). Randevu tool'ları (e-Nabız ve MHRS) randevu **almaz/iptal etmez**. MHRS tarafında ayrıca bir **çalışma-zamanı kapısı** var: yazma sınıfı bir uca gidilirse istek `WriteNotAllowed` ile durur. |
+| **Dürüst tool anotasyonları** | 37 tool'un 35'i `readOnlyHint: True`. İşaretlenmeyen 2'si `login_start`/`login_verify` — çünkü gerçekten yan etkileri var (telefonunuza SMS gider, oturum dosyası yazılır). Her şeye "salt-okunur" damgası vurulmadı. |
 | **Güvenlik kontrolleri atlatılmaz** | reCAPTCHA çözülmez, SMS OTP kaldırılmaz veya kırılmaz — kod **her zaman** sizin kayıtlı telefonunuza gider ve giriş insan-döngüdedir. Otomasyon, kodu elle girmenin yerine geçer; kontrolün kendisini ortadan kaldırmaz. |
 | **Veri sizde kalır** | Yalnız yerel `stdio`. Harici API, telemetri, analytics yok. PDF'ler diskinize `chmod 600` ile iner; içerik LLM'e verilmez, yalnız `{saved_path, byte_size, sha256, content_type}` döner. |
 | **Portala saygı** | İstekler arası hız sınırı (`ENABIZ_MIN_INTERVAL`, varsayılan 0.5 sn) — sunucuya yük bindirmemek için. Toplu/hızlı veri çekme aracı değildir. |
@@ -199,7 +199,7 @@ yolları elle yazın:
 olarak saklanır ve süresi (~30–60 dk) dolana dek yeniden kullanılır. Oturum düşerse veri
 tool'ları `error: "auth_required"` döner; yeniden giriş yapın.
 
-## Tool'lar (32)
+## Tool'lar (37)
 
 **Oturum:** `enabiz_login_start` · `enabiz_login_verify` · `enabiz_session_status`
 
@@ -220,6 +220,18 @@ tool'ları `error: "auth_required"` döner; yeniden giriş yapın.
 
 **Ziyaret & randevu:** `enabiz_list_hospital_visits` · `enabiz_get_visit_detail` ·
 `enabiz_list_appointments` (salt-okunur; almaz/iptal etmez)
+
+**MHRS (randevu sistemi):** `enabiz_mhrs_list_provinces` · `enabiz_mhrs_list_districts` ·
+`enabiz_mhrs_list_clinics` · `enabiz_mhrs_list_upcoming` · `enabiz_mhrs_list_history`
+
+> MHRS (`prd.mhrs.gov.tr`) e-Nabız'dan **ayrı bir sistemdir**; e-Nabız'ın "Randevu Al"
+> düğmesinin arkasındaki SSO devriyle bağlanılır. `enabiz_list_appointments` e-Nabız'ın
+> HTML tablosunu okur; MHRS tool'ları API'nin kendisini okur ve `hrn` (hasta randevu
+> numarası) döndürür — tabloda olmayan, iptal için gereken anahtar.
+>
+> **Bu tool'lar da randevu almaz/iptal etmez** (hepsi `readOnlyHint: True`). Randevu
+> alma iki-adımlı onayla ayrı bir fazda gelecek; bkz. [`docs/STATUS.md`](docs/STATUS.md)
+> ve [`docs/notes/decisions.md`](docs/notes/decisions.md) D7.
 
 **Profil & idari:** `enabiz_get_profile` · `enabiz_list_insurance` ·
 `enabiz_list_materials_devices` · `enabiz_list_emergency_notes`

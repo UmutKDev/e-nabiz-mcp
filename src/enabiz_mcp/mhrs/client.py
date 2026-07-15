@@ -14,6 +14,7 @@ aynı client'ı PAYLAŞAMAZ — sessizce yanlış URL'e giderdi.
 from __future__ import annotations
 
 import dataclasses
+from typing import Any
 
 import httpx
 
@@ -109,11 +110,29 @@ def api_client(cfg: Config, jwt: str, *, allow_write: bool = False) -> httpx.Cli
     return client
 
 
-def unwrap(resp: httpx.Response) -> dict:
-    """MHRS zarfını açar ve `data`'yı döndürür; hata kodlarını exception'a çevirir.
+def unwrap(resp: httpx.Response) -> Any:
+    """MHRS yanıtını açar ve `data`'yı döndürür; hata kodlarını exception'a çevirir.
 
     Zarf: `{lang, success, infos[], warnings[], errors[], data}`. `success` HTTP
     durumundan BAĞIMSIZDIR — 200 ile hata dönebilir, o yüzden gövdeye bakılır.
+
+    **MHRS iki farklı yanıt şekli kullanır** ve bu uca göre değişir, prefix'e göre
+    değil (canlı build 2.1.405'te ölçüldü):
+
+    - **Zarflı** — `kurum/...` uçları, `yonetim/genel/parametre/degeri/*`.
+      İstemci `e.data.data` okur.
+    - **ÇIPLAK DİZİ** — `yonetim/genel/il/selectinput-tree`,
+      `yonetim/genel/ilce/selectinput/{id}`, `yonetim/genel/lookup/selectinput/*`.
+      İstemci gövdeyi doğrudan dizi gibi kullanır (`e.data.map(...)`,
+      `Object.assign([], e.data)`). Zarf YOK: `success` yok, `errors[]` yok.
+
+    Çıplak biçimi reddetmek Faz 2'nin ilçe/lookup uçlarını tamamen kullanılamaz
+    yapardı ("MHRS beklenen zarfı döndürmedi" ile patlardı). Hata durumunda sunucu
+    zarfa döndüğü için (dict), liste GELMESİ başarı sinyalidir — ayrı bir `success`
+    alanına ihtiyaç yok.
+
+    Dönüş tipi bu yüzden `Any`: zarflı uçlarda `data` (genelde dict), çıplak
+    uçlarda listenin kendisi. Çağıran hangi ucu çağırdığını bilir.
 
     Reponun ilk JSON okuyucusu: 25+ parser'ın hepsi BeautifulSoup'tu.
     """
@@ -125,12 +144,14 @@ def unwrap(resp: httpx.Response) -> dict:
         body = resp.json()
     except ValueError as exc:
         raise MhrsError(f"MHRS JSON olmayan yanıt döndü (HTTP {resp.status_code}).") from exc
+
+    if isinstance(body, list):
+        return body  # çıplak uç; hata olsaydı zarf (dict) gelirdi
     if not isinstance(body, dict):
         raise MhrsError("MHRS beklenen zarfı döndürmedi.")
 
     if body.get("success"):
-        data = body.get("data")
-        return data if isinstance(data, dict) else {"data": data}
+        return body.get("data")
 
     errors = body.get("errors") or []
     first = errors[0] if errors and isinstance(errors[0], dict) else {}

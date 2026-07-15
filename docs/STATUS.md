@@ -1,12 +1,13 @@
 # Proje Durumu
 
-Son güncelleme: 2026-07-14
+Son güncelleme: 2026-07-15
 
 ## Nerede
 
 Giriş (XSRF + SMS OTP) → oturum kalıcılığı → kimlikli veri çekme → HTML parse →
-yapılandırılmış MCP çıktısı. **32 tool / 19 veri alanı**, tamamı salt-okunur.
-Tüm alanlar canlı portala karşı doğrulandı.
+yapılandırılmış MCP çıktısı. **37 tool / 20 veri alanı**, tamamı salt-okunur.
+e-Nabız alanları canlı portala karşı doğrulandı; MHRS tool'ları (Faz 2) HENÜZ
+canlı doğrulanmadı — sözleşmeleri bundle'dan çıkarıldı.
 
 | Alan | Durum |
 |---|---|
@@ -18,16 +19,27 @@ Tüm alanlar canlı portala karşı doğrulandı.
 | İdari: sigorta, malzeme/cihaz, acil notlar | 🟢 parser'lar doğru (bu hesapta 0 kayıt) |
 | Sağlık özeti (alanlar arası derleyici) | 🟢 canlı |
 | Belge indirme (lab · patoloji · epikriz · radyoloji PDF) | 🟢 canlı |
+| MHRS bundle keşfi (161 uç · 75 okuma) | 🟢 tamam — `findings/mhrs-discovery-report.md` |
+| MHRS auth (e-Nabız SSO devri → JWT) | 🟡 kod tamam, canlı doğrulanmadı |
+| MHRS okuma: il/ilçe/klinik + yaklaşan/geçmiş randevu | 🟡 kod tamam, canlı doğrulanmadı |
+| MHRS slot arama (`kurum-rss/…/slot`) | ⚪ Faz 2b — henüz tool yok |
+| MHRS randevu alma/iptal (iki-adımlı onay) | ⚪ Faz 3 — yazma; `decisions.md` D7 |
 | Canlı LLM-tool eval koşucusu | ⚪ yok (opsiyonel, ağır altyapı) |
 
 **Canlı doğrulama:** tüm alanlar gerçek bir hesapta çalıştırıldı; parser'lar dolu
 veri döndürdü. Kayıt sayıları burada YAZILMAZ — kardinalite de PHI'dir
 (bkz. `tests/test_no_cardinality.py`).
 
-## Tool yüzeyi (32)
+## Tool yüzeyi (37)
 
-Oturum (3) · sağlık özeti (1) · liste (18) · detay (9) · `enabiz_download_document` (1).
-Veri alanı = 18 liste ucu + profil = **19**. Tam liste: [README](../README.md#toollar-32).
+Oturum (3) · sağlık özeti (1) · liste (18) · detay (9) · `enabiz_download_document` (1)
+· MHRS okuma (5). Veri alanı = 18 liste ucu + profil + MHRS randevu = **20**.
+Tam liste: [README](../README.md#toollar-37).
+
+MHRS tool'ları `enabiz_mhrs_*` ile ayrılır: `prd.mhrs.gov.tr` e-Nabız'dan AYRI bir
+sistemdir ve SSO ile devredilir. `enabiz_list_appointments` e-Nabız'ın HTML
+tablosunu okur; MHRS tool'ları API'yi okur ve `hrn` döndürür — tabloda yok,
+iptalin anahtarı. Hepsi `readOnlyHint: True`; 37 tool'un yalnız 2'si (login) False.
 
 Liste tool'ları `limit` (varsayılan 50, `0` = sınırsız) alır ve
 `count`/`total`/`truncated` döndürür. `enabiz_list_lab_tests`'te sınır TEST

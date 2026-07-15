@@ -22,6 +22,8 @@ from .tools import (
     hospital_visits,
     labs,
     medications,
+    mhrs_appointments,
+    mhrs_search,
     pathology,
     prescription_types,
     prescriptions,
@@ -110,6 +112,12 @@ reports.register(mcp)
 radiology.register(mcp)
 appointments.register(mcp)
 profile.register(mcp)
+
+# MHRS (randevu sistemi) — e-Nabız'dan AYRI bir API; SSO ile devredilir.
+# `appointments` e-Nabız'ın HTML tablosunu okur, bunlar MHRS API'sini: farkı `hrn`
+# (hasta randevu numarası), tabloda yok, iptalin anahtarı. Şu an hepsi salt-okunur.
+mhrs_search.register(mcp)
+mhrs_appointments.register(mcp)
 
 # İdari + belge indirme
 administrative.register(mcp)
