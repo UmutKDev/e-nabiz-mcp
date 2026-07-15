@@ -24,6 +24,30 @@ from .discovery import API_BASE, BUNDLE_ORIGIN, classify_mhrs_call
 
 _JSON_HEADERS = {"Accept": "application/json, text/plain, */*"}
 
+#: Aşırı-sorgu / anti-bot kodları — hiçbiri RETRY EDİLMEZ.
+#:
+#: Kanıt durumu ikisi için AYNI DEĞİL, bilinçli olarak ikisi de tutuluyor:
+#:
+#: - **`RNDS1010` — bundle'da DOĞRULANDI** (canlı build 2.1.405'te 17 çağrı yerinde).
+#:   Anlamı ölçüldü: HTTP 428 ile gelir, yanıtta sonuçlar VARDIR, ve istemci
+#:   `randevuAraReCAPTCHAVisible: true` yapar. Yani "çok arama yaptın; sonuçların
+#:   burada ama bundan sonra reCAPTCHA çöz". Yumuşak eşik. BİZİM İÇİN yine de
+#:   terminaldir: reCAPTCHA çözmüyoruz (invaryant #4), dolayısıyla tekrar denemenin
+#:   hiçbir faydası yok — yalnız eşiği derinleştirir.
+#:
+#: - **`RNDS1000` — DOĞRULANMADI.** Bundle'da SIFIR kez geçer. Kamuya açık MHRS
+#:   mesajı ("hayatın olağan akışına aykırı şekilde çok fazla randevu sorgulaması
+#:   yaptınız… Alo 182") gerçektir, ama kodunun bu olduğu kanıtlanmadı; iddia daha
+#:   eski bir oturumdan taşındı ve sorgulanmadan tekrarlandı. Listede KALIYOR çünkü
+#:   yanılmanın maliyeti asimetrik: kod yoksa bu satır hiç tetiklenmez (bedava),
+#:   varsa kullanıcıyı online randevudan çıkaran kilidi yakalar.
+#:
+#: Bir tur koruma YALNIZ `RNDS1000`'e bağlıydı — yani bundle'da olmayan bir koda.
+#: `RNDS1010` jenerik `MhrsError`'a düşüyor, "TEKRAR DENEMEYİN" ipucu modele hiç
+#: ulaşmıyor ve model retry edebiliyordu: korumanın tam olarak engellemek için
+#: yazıldığı senaryo.
+RATE_LIMIT_CODES = frozenset({"RNDS1010", "RNDS1000"})
+
 
 class ApiBoundaryViolation(RuntimeError):
     """Bundle client'ı `/api/`'ye istek atmaya çalıştı — keşif sözleşmesi ihlali."""
@@ -158,11 +182,11 @@ def unwrap(resp: httpx.Response) -> Any:
     kodu = first.get("kodu")
     mesaj = first.get("mesaj") or "MHRS bilinmeyen hata."
 
-    if kodu == "RNDS1000":
-        # Retry ETME — kilidi derinleştirir ve kullanıcıyı online randevudan çıkarır.
+    if kodu in RATE_LIMIT_CODES:
+        # Retry ETME — eşiği derinleştirir ve kullanıcıyı online randevudan çıkarır.
         raise MhrsRateLimited(
-            f"MHRS anti-bot kilidi (RNDS1000): {mesaj} "
-            "Sorgu TEKRARLANMAYACAK — tekrar denemek kilidi derinleştirir.",
+            f"MHRS aşırı-sorgu eşiği ({kodu}): {mesaj} "
+            "Sorgu TEKRARLANMAYACAK — tekrar denemek durumu kötüleştirir.",
             kodu,
         )
     if kodu in {"LGN1004", "LGN2001"}:

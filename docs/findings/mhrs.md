@@ -135,9 +135,38 @@ Tüm uçlar aynı zarfı döner:
 | Kod | Anlam | Davranış |
 |---|---|---|
 | `GNL1009` | İşlem başarılı | — |
-| `RNDS1000` | **Anti-bot kilidi.** "Hayatın olağan akışına aykırı şekilde çok fazla randevu sorgulaması yaptınız… Alo 182'yi arayınız" | **Retry YOK — sert dur.** Kullanıcıyı online randevudan tamamen çıkarır; zarar hız kaybı değil, **erişim kaybı**. |
+| `RNDS1010` | **Aşırı sorgu → reCAPTCHA.** ✅ bundle'da doğrulandı (17 çağrı yeri) | **Retry YOK.** Ayrıntı aşağıda. |
+| `RNDS1000` | **Anti-bot kilidi (⚠️ DOĞRULANMADI).** "Hayatın olağan akışına aykırı şekilde çok fazla randevu sorgulaması yaptınız… Alo 182'yi arayınız" | **Retry YOK — sert dur.** Ayrıntı aşağıda. |
 | `LGN2001` | Oturum başka cihazdan sonlandırıldı | MHRS **tek aktif oturum** tutuyor gibi → programatik login kullanıcının telefondaki oturumunu düşürebilir. Doğrulanmadı. |
 | `LGN1004` | Oturum süresi doldu | Zinciri baştan koştur. |
+
+### Aşırı-sorgu kodları — kanıt durumu eşit DEĞİL
+
+**`RNDS1010` — DOĞRULANDI.** Canlı build 2.1.405'te 17 çağrı yerinde geçiyor.
+Semantiği bundle'dan ölçüldü ve sürprizli: **HTTP 428** ile gelir, **yanıtta sonuçlar
+VARDIR** (`dataList: e.response.data.data`), ve istemci sunucunun mesajını modal'da
+gösterip **`randevuAraReCAPTCHAVisible: true`** yapar. Yani anlamı: *"çok arama
+yaptın; sonuçların burada ama bundan sonra reCAPTCHA çöz"* — **yumuşak** eşik, sert
+kilit değil.
+
+**Bizim için yine de terminaldir:** reCAPTCHA çözmüyoruz (invaryant #4), dolayısıyla
+tekrar denemenin faydası yok, yalnız eşiği derinleştirir.
+
+**`RNDS1000` — DOĞRULANMADI.** Bundle'da **sıfır kez** geçiyor. Kamuya açık MHRS
+mesajı gerçektir, ama kodunun bu olduğu bu repoda hiçbir yerde kanıtlanmadı; iddia
+daha eski bir oturumdan taşındı ve sorgulanmadan tekrarlandı — kod, config, testler
+ve bu doküman baştan sona onun üzerine kuruldu.
+
+Listede **kalıyor**, çünkü yanılmanın maliyeti asimetrik: kod yoksa o dal hiç
+tetiklenmez (bedava), varsa kullanıcıyı online randevudan çıkaran kilidi yakalar.
+
+**Yaşanan hata:** koruma bir tur YALNIZ `RNDS1000`'e bağlıydı — yani bundle'da
+olmayan bir koda. `RNDS1010` jenerik `MhrsError`'a düşüyor, "TEKRAR DENEMEYİN" ipucu
+modele hiç ulaşmıyor ve model retry edebiliyordu: korumanın tam olarak engellemek
+için yazıldığı senaryo. Ölçüldü ve düzeltildi (`client.RATE_LIMIT_CODES`).
+
+**Ders:** bir hata kodu etrafında savunma kurarken önce o kodun VAR olduğunu kanıtla.
+Doğru mesaj + uydurma kod = çalışmayan koruma.
 
 `yonetim/genel/mesaj/by-kodu/<KOD>` ucu mesaj metinlerini döndürür; bundle'da
 referans verilenler: `GNL2016`, `GNL2030`, `RND4105`, `RND6041`, `RND6042`,

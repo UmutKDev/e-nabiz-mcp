@@ -110,13 +110,31 @@ def test_unwrap_returns_data():
     assert unwrap(r) == {"jwt": "x"}
 
 
-def test_unwrap_rnds1000_is_rate_limited_not_generic_error():
-    """RNDS1000 kendi tipini alır — çağıran retry ETMEMELİ diye ayırt edilebilsin."""
-    r = httpx.Response(200, json=_error("RNDS1000", "çok fazla sorgulama"))
+@pytest.mark.parametrize("kodu", ["RNDS1010", "RNDS1000"])
+def test_unwrap_rate_limit_codes_are_not_generic_errors(kodu):
+    """Aşırı-sorgu kodları kendi tipini alır — çağıran retry ETMEMELİ diye ayırt edilsin.
+
+    `RNDS1010` bundle'da DOĞRULANMIŞ koddur (17 çağrı yeri); `RNDS1000` doğrulanmadı
+    ama savunma amaçlı tutulur. Bir tur koruma YALNIZ `RNDS1000`'e bağlıydı — yani
+    bundle'da hiç geçmeyen bir koda — ve `RNDS1010` jenerik `MhrsError`'a düşüyordu:
+    "TEKRAR DENEMEYİN" ipucu modele ulaşmıyor, model retry edebiliyordu. Korumanın
+    tam olarak engellemek için var olduğu senaryo.
+    """
     with pytest.raises(mhrs_auth.MhrsRateLimited) as exc:
-        unwrap(r)
-    assert exc.value.kodu == "RNDS1000"
+        unwrap(httpx.Response(200, json=_error(kodu, "çok fazla sorgulama")))
+    assert exc.value.kodu == kodu
     assert "TEKRARLANMAYACAK" in str(exc.value)
+
+
+def test_rate_limit_codes_include_the_one_actually_in_the_bundle():
+    """`RNDS1010` listede OLMALI — kanıtı olan tek kod odur.
+
+    Kapsam daralmasına karşı çıplak bir çapa: biri listeyi "sadeleştirip" bundle'da
+    doğrulanmış kodu çıkarırsa burada patlar.
+    """
+    from enabiz_mcp.mhrs.client import RATE_LIMIT_CODES
+
+    assert "RNDS1010" in RATE_LIMIT_CODES
 
 
 @pytest.mark.parametrize("kodu", ["LGN1004", "LGN2001"])
