@@ -9,6 +9,13 @@ Talep bir **randevu DEĞİLDİR** — hiçbir slot tutmaz, 15 günlük branş ya
 taşımaz. Ama sunucuda kalıcı bir kayıt oluşturur ve bildirim tetikler, o yüzden
 yazmadır ve `confirm=True` ister.
 
+**Bu iddia kanıtlandı** (bir güvenlik dayanağı olduğu için): MHRS eşleşme bulunca
+otomatik randevu AÇMAZ; kullanıcıya bildirim gider, kullanıcı linkten "Onayla" derse
+`randevu-ekle` çağrılır, "Reddet" derse `randevu-talep-eslesme-red`. Yani randevu
+ancak kullanıcının onayıyla oluşur (`vatandas-85-chunk.js`; bkz. `docs/findings/mhrs.md`).
+Canlı bir talebin `"Randevu oluşturuldu"` durumu, o talebin KARŞILANMIŞ hâlidir —
+otomatik bir yazma değil.
+
 Bundle'daki akış (vatandas-45-chunk.js):
     GET  yonetim/genel/mesaj/by-kodu/GNL2030   → onay metni
     POST kurum/randevu-talep  {lhatirlatmaSaatSecimi, mhrsHekimId, mhrsKlinikId,

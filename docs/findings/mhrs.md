@@ -484,3 +484,34 @@ yerden çağrılmıyor.
 
 Ders, `RandevuAl`'ınkinin ikizi: orada **ad** yalan söylüyordu (randevu almıyor,
 token basıyor), burada **çağrı** yalan söylüyor (sonucu kullanılmıyor).
+
+
+### Talep OTOMATİK randevu açmaz — kanıt (chunk-85)
+
+"Talep bir randevu değildir, 15 günlük branş yasağı riski taşımaz" iddiası bir
+güvenlik dayanağıdır (`mhrs_requests.py`), o yüzden kanıtlandı. Kuşku sebebi: canlı
+bir talebin durumu **"Randevu oluşturuldu"** görünüyordu — MHRS talepten kendiliğinden
+randevu açıyor olabilir miydi?
+
+Hayır. `vatandas-85-chunk.js` bildirimden açılan AYRI bir sayfadır ve akış şudur:
+
+```
+talep → MHRS eşleşme bulur → kullanıcıya bildirim → link → Onayla | Reddet
+```
+
+- **Onayla** → `POST kurum/randevu/randevu-ekle` `{fkSlotId, baslangicZamani,
+  bitisZamani, randevuNotu}` — bizim `book_confirm`'ün kullandığı uç.
+- **Reddet** → `GET yonetim/genel/mesaj/by-kodu/GNL1020` (onay metni) →
+  `POST kurum/randevu/randevu-talep-eslesme-red/{id}`
+
+Yani randevu ancak KULLANICI onaylayınca oluşur. `"Randevu oluşturuldu"` bir talebin
+karşılanmış (terminal) hâlidir, otomatik bir yazma değil.
+
+Yan bulgu: o sayfa kendi JWT'sini taşır (`h.a.defaults.headers.Authorization =
+"Bearer " + x.jwt`) — bildirim linki kendi kimliğiyle gelir ve iş bitince header
+silinir. Bu akışın tool karşılığı YOKTUR ve gerekmez: bildirim kullanıcıya gider,
+eşleşmeyi o onaylar.
+
+Talep durumları `randevuTalepDurumu.val` ile gelir; talep listesindeki "Randevu Al"
+butonu yalnız belirli durumlarda açıktır (`disabled: ![A,O].includes(val)`) — yani
+"silinebilir"/"yenilenebilir" gibi bu karar da SUNUCUNUNDUR, bizim değil.
