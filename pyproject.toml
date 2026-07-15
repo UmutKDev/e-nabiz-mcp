@@ -1,0 +1,58 @@
+[project]
+name = "enabiz-mcp"
+version = "0.1.0"
+description = "E-Nabız (T.C. Sağlık Bakanlığı kişisel sağlık sistemi) için yerel MCP sunucusu"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Umut Kızıloğlu", email = "umut.kiziloglu@icloud.com" }
+]
+requires-python = ">=3.11"
+keywords = ["mcp", "e-nabiz", "enabiz", "health", "saglik"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "Environment :: Console",
+    "Natural Language :: Turkish",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+
+dependencies = [
+    "beautifulsoup4>=4.15.0",
+    "fastmcp>=3.4.4",
+    "httpx>=0.28.1",
+    # Doğrudan import ediliyor (parsers.py). Bugün fastmcp ile transitif geliyor —
+    # ama neyi import ediyorsak onu beyan ederiz.
+    "pydantic>=2.11.7",
+]
+
+[project.urls]
+Homepage = "https://github.com/UmutKDev/e-nabiz-mcp"
+Repository = "https://github.com/UmutKDev/e-nabiz-mcp"
+Issues = "https://github.com/UmutKDev/e-nabiz-mcp/issues"
+
+[project.scripts]
+enabiz-mcp = "enabiz_mcp.server:main"
+
+[build-system]
+requires = ["uv_build>=0.11.8,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.14.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]

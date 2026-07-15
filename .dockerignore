@@ -1,0 +1,121 @@
+# ============================================================
+# GÜVENLİK — bu imaj HERKESE AÇIK olarak yayımlanır (ghcr.io).
+#
+# Docker .gitignore'u MİRAS ALMAZ. Build context ayrı ve bağımsız
+# bir mekanizmadır; bu dosya PHI/kimlik sızıntısına karşı TEK engeldir.
+#
+# Strateji: ALLOWLIST (deny-all → seçili geri-al), denylist DEĞİL.
+# Denylist fail-open'dır: unutulan her YENİ dosya sessizce imaja girer.
+# Allowlist fail-closed'dur: unutulan yeni dosya dışarıda kalır ve
+# eksikse build gürültüyle patlar.
+# Bu repoda fail-open'ın bedeli: gerçek T.C. Kimlik No + portal şifresi
+# (.env) ve 6.7MB ham sağlık kaydı (docs/findings/raw/), herkese açık
+# bir imaj katmanında — kalıcı olarak.
+#
+# KATMAN DEĞİŞMEZLİĞİ: `COPY . .` sonrası `RUN rm .env` dosyayı SİLMEZ;
+# alt katmanda kalır ve `docker save` / `docker history` ile çıkarılır.
+# Tek doğru savunma, dosyanın context'e HİÇ girmemesidir.
+#
+# Sıra önemlidir: sonraki (en son eşleşen) kural öncekini ezer.
+# ============================================================
+
+# ------------------------------------------------------------
+# 1) HER ŞEYİ REDDET.
+#    '*' baştaki noktayı da eşler → .env, .git, .venv, .claude dahil
+#    kökteki her şey burada düşer. Aşağıda yalnız imajı KURMAK için
+#    kanıtlanmış şekilde gerekli olanlar geri alınır.
+# ------------------------------------------------------------
+*
+
+# ------------------------------------------------------------
+# 2) YALNIZ build için gerekli olanları geri al.
+#    Gerekçesi yazılamayan satır buraya eklenmez.
+# ------------------------------------------------------------
+
+# Paket tanımı: bağımlılıklar + `enabiz-mcp` konsol giriş noktası.
+!pyproject.toml
+
+# Kilitli, tam transitif bağımlılık grafiği. `uv sync --frozen` bunu okur.
+# Olmazsa build canlı PyPI'ya karşı yeniden çözülür ve aynı commit iki
+# farklı bağımlılık seti üretebilir (parser davranış kayması riski).
+!uv.lock
+
+# ZORUNLU BUILD GİRDİSİ — pyproject.toml:5 `readme = "README.md"`.
+# uv_build bunu wheel METADATA'sı için açar. Yoksa build şu hatayla ölür:
+#   failed to open file `.../README.md`: No such file or directory
+# (Bu ampirik olarak doğrulandı.) "Doküman runtime'da gereksiz" diye
+# SİLMEYİN — bu bir çalışma zamanı dosyası değil, bir build girdisidir.
+!README.md
+
+# Yorumlayıcı sürümü beyanı (3.13). Taban imaj zaten python:3.13-slim'dir ve
+# UV_PYTHON_DOWNLOADS=0 ile uv başka yorumlayıcı İNDİREMEZ. Bu dosyanın işlevi
+# bir ÇAPRAZ KONTROLDÜR: taban imaj etiketi ile dev ortamı bir gün ayrışırsa
+# (ör. taban 3.14'e çekilir, .python-version 3.13'te kalır) uv sessizce farklı
+# bir sürümle build etmek yerine GÜRÜLTÜYLE patlar. Küçük dosya, ucuz sigorta.
+!.python-version
+
+# Paketin kendisi. Wheel'e giren tek kaynak ağacı.
+!src
+
+# ------------------------------------------------------------
+# 3) Geri alınan ağaçların İÇİNE sızabilecek çöpü yeniden reddet.
+#    `!src` alt dizinleri de geri aldığı için bu satırlar şarttır.
+#    .pyc dosyaları derlendikleri makinenin MUTLAK yolunu (co_filename)
+#    gömer → geliştiricinin gerçek adı + host dizin yapısı sızar.
+#    Ayrıca bayat bytecode, düzenlenmiş kaynağı gölgeleyebilir.
+# ------------------------------------------------------------
+**/__pycache__
+**/*.py[cod]
+**/*$py.class
+**/*.egg-info
+
+# ============================================================
+# 4) DERİNLEMESİNE SAVUNMA — bu bölüm BİLEREK gereksizdir.
+#    Yukarıdaki `*` bunların hepsini zaten dışarıda tutuyor.
+#    Amaç: (a) biri ileride `*` satırını silip denylist'e dönerse,
+#    (b) biri allowlist'e geniş bir `!docs` / `!scripts` eklerse,
+#    (c) config.py:36,44'teki ENABIZ_SESSION_PATH / ENABIZ_DOWNLOAD_DIR
+#        override'ları repo İÇİNE yönlendirilirse — o an canlı oturum
+#        cookie'leri ve PHI PDF'leri build context'inde belirmeye başlar
+#        ve hiçbir ad-tabanlı kural onları yakalamaz.
+#    SİLMEYİN.
+# ============================================================
+
+# Gerçek kimlik bilgileri (ENABIZ_TCKIMLIK + ENABIZ_SIFRE).
+# NOT: .env.example (boş placeholder) zararsızdır, ancak runtime'da
+# gerekmediği için bilerek geri ALINMADI. `.env` ile karıştırmayın.
+**/.env
+**/.env.*
+**/*.secret
+
+# Canlı, tekrar-oynatılabilir portal oturumu ve XSRF token'ları.
+**/session.json
+**/pending.json
+**/*.session
+**/*.cookies
+**/session_cache*
+**/cookies.txt
+
+# İndirilmiş / yakalanmış ham sağlık verisi (rapor/epikriz/patoloji PDF'leri).
+**/downloads
+**/*.phi
+**/*.pdf
+
+# Ham portal yakalamaları: gerçek T.C. Kimlik No, ad, doğum tarihi, kan grubu,
+# telefon, hastane adları + canlı XSRF token'ları. Dosya adları tek başına
+# tanı sızdırır (patoloji.html, epikriz.html, hastalik.html...).
+# Dizin düzeyinde dışlanır: ileride docs/findings/samples/ gibi yeni bir
+# yakalama yolu açılırsa da kapsanır.
+docs
+scratch
+tmp
+
+# Yerel makine yapılandırması, iç araç gereci ve PHI YAZAN yakalama betikleri
+# (scripts/discover.py — canlı portal tarayıcısı; MCP tool'u DEĞİL).
+**/.mcp.json
+.claude
+.git
+.venv
+scripts
+tests
+evals

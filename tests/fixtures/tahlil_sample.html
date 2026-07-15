@@ -1,0 +1,84 @@
+<!-- SENTETİK fixture — gerçek sağlık verisi (PHI) İÇERMEZ. -->
+<!-- /Tahlil/Index HTML accordion partial yapısını taklit eder (bkz. data-models.md). -->
+<!-- Her columnContainer bir etiket <span> (ör. "Sonuç :") + değer içerir (gerçek yapı). -->
+<div id="accordionTahlilListe">
+
+  <div class="accordion-item">
+    <div class="accordion-header">
+      <div class="tahlilContent"><div class="tahlilFlexBox">
+        <span class="tAcordionDate">
+          <span class="zCardDateGun">15</span>
+          <span class="zCardDateAy">Tem</span>
+          <span class="zCardDateYil">2024</span>
+        </span>
+        <div class="tahlilBilgiContainer">
+          <div class="hastaneAdi">TEST HASTANESI A</div>
+          <a class="pdfBtnSmall" onclick="TahlillerPdfIndir('tr-TR', '15.07.2024', 'K12345')"></a>
+        </div>
+      </div></div>
+    </div>
+    <div class="accordion-collapse collapse"><div class="accordion-body">
+      <div class="tahlillerContainer"><div class="tahlilList"><div class="tahlilBody">
+
+        <div class="rowContainer">
+          <div class="columnContainer islemAdiContainer"><span id="islemAdi" islemadi="GLUKOZ">İşlem Adı :</span>GLUKOZ</div>
+          <div class="columnContainer"><span>Sonuç :</span>95</div>
+          <div class="columnContainer"><span>Sonuç Birimi :</span>mg/dL</div>
+          <div class="columnContainer"><span>Referans Değeri :</span>70-100</div>
+          <div class="columnContainer karsilastirmaContainer"><a class="karsilastirmaBtn" onclick="GrafikGoster('GLUKOZ')"></a></div>
+          <div class="columnContainer durumNormal"></div>
+        </div>
+
+        <div class="rowContainer">
+          <div class="columnContainer islemAdiContainer"><span islemadi="KOLESTEROL">İşlem Adı :</span>KOLESTEROL</div>
+          <div class="columnContainer"><span>Sonuç :</span>240</div>
+          <div class="columnContainer"><span>Sonuç Birimi :</span>mg/dL</div>
+          <div class="columnContainer"><span>Referans Değeri :</span>0-200</div>
+          <div class="columnContainer karsilastirmaContainer"><a class="karsilastirmaBtn" onclick="GrafikGoster('KOLESTEROL')"></a></div>
+          <div class="columnContainer durumRefdisi"></div>
+        </div>
+
+        <!-- Tek-üst-sınırlı referans: sunucu durumNormal demiş ama 8,54 > 2,7 → out_of_range -->
+        <div class="rowContainer">
+          <div class="columnContainer islemAdiContainer"><span islemadi="HOMA-IR">İşlem Adı :</span>HOMA-IR</div>
+          <div class="columnContainer"><span>Sonuç :</span>8,54</div>
+          <div class="columnContainer"><span>Sonuç Birimi :</span></div>
+          <div class="columnContainer"><span>Referans Değeri :</span>-2,7</div>
+          <div class="columnContainer karsilastirmaContainer"><a class="karsilastirmaBtn" onclick="GrafikGoster('HOMA-IR')"></a></div>
+          <div class="columnContainer durumNormal"></div>
+        </div>
+
+      </div></div></div>
+    </div></div>
+  </div>
+
+  <div class="accordion-item">
+    <div class="accordion-header">
+      <div class="tahlilContent"><div class="tahlilFlexBox">
+        <span class="tAcordionDate">
+          <span class="zCardDateGun">03</span>
+          <span class="zCardDateAy">Oca</span>
+          <span class="zCardDateYil">2023</span>
+        </span>
+        <div class="tahlilBilgiContainer">
+          <div class="hastaneAdi">TEST HASTANESI B</div>
+        </div>
+      </div></div>
+    </div>
+    <div class="accordion-collapse collapse"><div class="accordion-body">
+      <div class="tahlillerContainer"><div class="tahlilList"><div class="tahlilBody">
+
+        <div class="rowContainer">
+          <div class="columnContainer islemAdiContainer"><span islemadi="HEMOGLOBIN">İşlem Adı :</span>HEMOGLOBIN</div>
+          <div class="columnContainer"><span>Sonuç :</span>13.5</div>
+          <div class="columnContainer"><span>Sonuç Birimi :</span>g/dL</div>
+          <div class="columnContainer"><span>Referans Değeri :</span>12-16</div>
+          <div class="columnContainer karsilastirmaContainer"><a class="karsilastirmaBtn" onclick="GrafikGoster('HEMOGLOBIN')"></a></div>
+          <div class="columnContainer durumNormal"></div>
+        </div>
+
+      </div></div></div>
+    </div></div>
+  </div>
+
+</div>

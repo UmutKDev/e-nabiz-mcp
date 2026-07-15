@@ -1,0 +1,54 @@
+# ============================================================
+# GÜVENLİK — bu proje HASSAS SAĞLIK VERİSİ (PHI) ile çalışır.
+# Aşağıdakiler ASLA commit edilmez.
+# ============================================================
+# Kimlik bilgileri
+.env
+.env.*
+!.env.example
+*.secret
+
+# Oturum / cookie önbellekleri
+*.session
+session.json
+session_cache*
+cookies.txt
+*.cookies
+
+# İndirilen ham sağlık verisi / kişisel yanıtlar
+docs/findings/raw/
+docs/findings/samples/
+*.phi
+scratch/
+tmp/
+
+# Özel (gerçek-veri) eval soruları — kişisel, paylaşılmaz
+evals/*.private.xml
+
+# ============================================================
+# Python
+# ============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.uv/
+
+# Test / araçlar
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editör / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+.mcp.json

@@ -1,0 +1,89 @@
+# Paketi PyPI'a yayımlar — `uvx enabiz-mcp` bunu kullanır.
+#
+# KİMLİK DOĞRULAMA: Trusted Publishing (OIDC). Hiçbir API token'ı üretilmez,
+# saklanmaz veya repo secret'ına yazılmaz; PyPI, GitHub'ın imzaladığı kısa ömürlü
+# bir kimlik iddiasına güvenir. Bu yüzden `secrets.PYPI_TOKEN` YOKTUR ve olmamalı.
+#
+# TEK SEFERLİK KURULUM (PyPI web arayüzünde, siz yaparsınız):
+#   https://pypi.org/manage/account/publishing/
+#     PyPI Project Name : enabiz-mcp
+#     Owner             : UmutKDev
+#     Repository name   : e-nabiz-mcp
+#     Workflow name     : publish-pypi.yml
+#     Environment name  : pypi
+#
+# YAYIM GERİ ALINAMAZ: PyPI'da bir sürüm dosyası silinip yerine aynı sürümle
+# yenisi konulamaz; yank'lansa bile indirilebilir kalır. Bu yüzden yayım yalnız
+# `v*` etiketiyle tetiklenir ve öncesinde testler + sızıntı denetimi koşar.
+name: publish-pypi
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+
+      - run: uv sync --frozen
+      - run: uv run pytest
+      - run: uv run ruff check
+
+      - run: uv build
+
+      # PHI/kimlik sızıntısı denetimi — Docker imajında olduğu gibi burada da
+      # zorunlu. PyPI'da bir sızıntı KALICIDIR (silinemez, yalnız yank'lanır).
+      # Pozitif kontrol şart: tarayıcının canlı olduğu kanıtlanmadan "0 isabet"
+      # hiçbir şey ifade etmez (bu tuzağa geliştirme sırasında bizzat düşüldü:
+      # BSD grep -rlI koca bir ağaçta sessizce 0 dönüyordu).
+      - name: sızıntı denetimi (pozitif kontrollü)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/insp/wheel
+          tar xzf dist/*.tar.gz -C /tmp/insp
+          # `unzip` yerine python -m zipfile: her runner'da Python var, unzip
+          # garanti değil. Eksik bir aracın denetimi sessizce atlamasını istemeyiz.
+          python -m zipfile -e dist/*.whl /tmp/insp/wheel
+
+          if ! grep -rqI 'enabiz_mcp' /tmp/insp; then
+            echo "::error::POZİTİF KONTROL BAŞARISIZ — tarayıcı çalışmıyor, sonuçlara güvenilemez"
+            exit 1
+          fi
+          echo "pozitif kontrol tamam: tarayıcı canlı"
+
+          # Ad-tabanlı: pakete asla girmemesi gerekenler.
+          if find /tmp/insp \( -name '.env' -o -name '.env.*' -o -path '*findings*' \
+               -o -name 'session.json' -o -name '*.phi' -o -name '*.pdf' \) | grep -q .; then
+            echo "::error::Yasak dosya pakete girmiş"
+            find /tmp/insp \( -name '.env' -o -path '*findings*' -o -name '*.pdf' \)
+            exit 1
+          fi
+
+          # İçerik-tabanlı: kimlik bilgisi biçimleri.
+          if grep -rqI -E 'ENABIZ_(TCKIMLIK|SIFRE)=[^[:space:]<>{]' /tmp/insp; then
+            echo "::error::Pakette gerçek kimlik bilgisi görünüyor"
+            exit 1
+          fi
+          echo "sızıntı denetimi temiz"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi          # PyPI trusted publisher yapılandırmasıyla eşleşmeli
+    permissions:
+      id-token: write          # OIDC için ZORUNLU — token'sız yayımın tek yolu
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

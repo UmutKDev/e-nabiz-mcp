@@ -1,0 +1,81 @@
+# Konteyner imajını ghcr.io'ya yayımlar.
+#
+# Tetikleyici: `v*` etiketi (ör. v0.1.0) veya elle çalıştırma.
+# `main`'e her push'ta YAYIMLAMAZ — bu imaj kişisel sağlık verisine erişen bir
+# araçtır; ne zaman yayımlandığı bilinçli bir karar olmalı, otomatik bir yan
+# etki değil.
+#
+# NOT: Paket görünürlüğü (private/public) bu workflow tarafından DEĞİŞTİRİLMEZ.
+# GHCR'de ilk yayımda paket private başlar; public yapmak GitHub paket
+# ayarlarından tek seferlik ve bilinçli bir işlemdir.
+name: publish-image
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # Testler ağsızdır ve sentetik fixture kullanır (PHI yok) — yayımdan önce
+      # salt-okunur invaryantını doğrulayan suite'i çalıştırmak ucuzdur.
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - run: uv run pytest
+      - run: uv run ruff check
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # `latest` KOŞULU açıkça etikete bağlı: `{{is_default_branch}}` bir
+          # TAG push'unda false döner (ref = refs/tags/v…), yani onunla `latest`
+          # hiçbir zaman yayımlanmazdı.
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # provenance/sbom: imajın bu repodan, bu commit'ten üretildiğini
+          # doğrulanabilir kılar.
+          provenance: true
+          sbom: true
+
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true

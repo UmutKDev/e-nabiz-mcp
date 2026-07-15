@@ -1,0 +1,34 @@
+<!-- SENTETİK — PHI yok. /Ziyaret/GetZiyaretDetay 4-tablo yapısını taklit eder. -->
+<div>
+  <table id="tblZiyaretlerimTani">
+    <thead><tr><th>Tarih</th><th>Tanı</th><th>Hekim</th><th>Klinik</th></tr></thead>
+    <tbody>
+      <tr><td>03.03.2024</td><td>I10 - HIPERTANSIYON</td><td>DR TANI</td><td>Kardiyoloji</td></tr>
+    </tbody>
+  </table>
+
+  <table id="tblZiyaretlerimOnTani">
+    <thead><tr><th>Tarih</th><th>Ön Tanı</th><th>Hekim</th><th>Klinik</th></tr></thead>
+    <tbody></tbody>
+  </table>
+
+  <table id="tblZiyaretlerimEkTani">
+    <thead><tr><th>Tarih</th><th>Ek Tanı</th><th>Hekim</th><th>Klinik</th></tr></thead>
+    <tbody></tbody>
+  </table>
+
+  <table id="tblZiyaretlerimIslemler">
+    <thead><tr>
+      <th>İşlem Zamanı</th><th>Randevu Zamanı</th><th>Adet</th><th>İşlem Adı</th><th>Hata Bildir</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td>03.03.2024 10:00</td><td>03.03.2024 09:30</td><td>1</td><td>MUAYENE</td>
+        <td><a onclick="HastaneyeHataBildir('x')">!</a></td>
+      </tr>
+      <tr>
+        <td>03.03.2024 10:15</td><td></td><td>2</td><td>EKG</td><td></td>
+      </tr>
+    </tbody>
+  </table>
+</div>

@@ -1,0 +1,18 @@
+<!-- SENTETİK — PHI yok. /Home/ProfilBilgilerim yapısını taklit eder. -->
+<div class="col-lg-3 cardProfilBilgileri">
+  <div class="profileRow profilIdCard" data-bs-original-title="Adı Soyadı">TEST KULLANICI</div>
+  <div class="profileRow profiltakvimIcon" data-bs-original-title="Doğum Tarihi">01.01.1990</div>
+  <div class="profileRow profilKonumIcon" data-bs-original-title="Doğum Yeri">ANKARA</div>
+</div>
+<form id="formProfilDuzenle" action="/Profil/ProfilGuncelle">
+  <label for="boy">Boy</label>
+  <input type="number" name="Boy" id="boy" value="180">
+  <label for="kilo">Kilo</label>
+  <input type="number" name="Kilo" id="kilo" value="72,5">
+  <label>Aile Hekimi Bilgileriniz</label>
+  <textarea disabled>Aile Sağlığı Merkezi - DR AILE HEKIMI</textarea>
+</form>
+<script>
+  var orgData = { 'Boy':'180', 'Kilo':'72,5', 'KanGrubu':'4', 'YasadigiUlke':'TÜRKİYE', 'YasadigiSehir':'ANKARA' };
+  $(function(){ $("#kanGrubuSelect").val('4').trigger('change'); });
+</script>

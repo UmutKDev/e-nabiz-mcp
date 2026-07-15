@@ -1,0 +1,39 @@
+<!-- SENTETİK — PHI yok. /Ziyaret/Index kart ızgarası yapısını taklit eder.
+     Hastane/klinik adları portaldaki gibi TÜMÜ BÜYÜK HARF ve Türkçe İ/I içerir
+     (gerçek veri: "T.C. SAĞLIK BAKANLIĞI ... ŞEHİR HASTANESİ" / "İÇ HASTALIKLARI").
+     Bu, filtrelerin Türkçe katlamasını test edilebilir kılar — bkz. _text.tr_lower. -->
+<div class="row" id="ziyaretlerContainer">
+  <div class="col-lg-6">
+    <div class="card ziyaretCardList">
+      <div class="card-body">
+        <span class="zCardDate">
+          <span class="zCardDateGun">03</span>
+          <span class="zCardDateAy">Mart</span>
+          <span class="zCardDateYil">2024</span>
+        </span>
+        <span class="zTarihS" style="display:none">03.03.2024</span>
+        <div><p class="card-text">T.C. SAĞLIK BAKANLIĞI TEST ŞEHİR HASTANESİ</p></div>
+        <p class="hastaneTakipNo"><span>Hastane Takip No: </span>TKP001</p>
+        <p class="drBrans">İÇ HASTALIKLARI</p>
+        <p class="drAdi">DR TEST A</p>
+        <div class="btnGroup">
+          <a class="card-red-link" onclick="openModal({url:'/Ziyaret/GetZiyaretDetay?data=DREF001&amp;hastane=H1&amp;brans=B1'})">Detay Görüntüle</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card ziyaretCardList">
+      <div class="card-body">
+        <span class="zTarihS" style="display:none">10.10.2022</span>
+        <div><p class="card-text">TEST OSMANGAZİ 999 NOLU AİLE HEKİMLİĞİ BİRİMİ</p></div>
+        <p class="hastaneTakipNo"><span>Hastane Takip No: </span>TKP002</p>
+        <p class="drBrans">AİLE HEKİMLİĞİ</p>
+        <p class="drAdi">DR TEST B</p>
+        <div class="btnGroup">
+          <a class="card-red-link" onclick="openModal({url:'/Ziyaret/GetZiyaretDetay?data=DREF002&amp;hastane=H2&amp;brans=B2'})">Detay Görüntüle</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
