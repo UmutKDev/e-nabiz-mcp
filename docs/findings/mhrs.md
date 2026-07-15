@@ -140,6 +140,31 @@ Tüm uçlar aynı zarfı döner:
 | `LGN2001` | Oturum başka cihazdan sonlandırıldı | MHRS **tek aktif oturum** tutuyor gibi → programatik login kullanıcının telefondaki oturumunu düşürebilir. Doğrulanmadı. |
 | `LGN1004` | Oturum süresi doldu | Zinciri baştan koştur. |
 
+### ⚠️ JWT `exp`'i GÜVENİLİR DEĞİL — tek oturum (canlıda ölçüldü)
+
+Faz 1 "JWT ömrü tam 20 saat (iat→exp = 72000s), `refreshToken: null`" diyordu. `exp`
+alanı doğru, ama **anlamı yanlış**: canlıda JWT yerel olarak **19.6 saat geçerli
+görünürken sunucu 401 verdi**.
+
+Sebep kullanıcı tarafından teşhis edildi: **tarayıcıdan MHRS'ye giriş yapılmıştı.**
+Yani `LGN2001` tek-oturum davranışı gerçek ve **beklenenin tersi yönde de işliyor** —
+endişe "bizim login kullanıcının telefonundaki oturumu düşürür" idi; gözlenen ise
+**kullanıcının girişi bizim token'ı öldürüyor**. Aynı turda e-Nabız cookie oturumu da
+düşmüştü.
+
+**Bu bir kenar durum DEĞİL, normal akış:** kullanıcı MHRS'yi zaten kendi kullanıyor.
+Her tarayıcı/telefon girişinde bizim token ölecek.
+
+**Yol açtığı hata:** `mhrs_session` canlılığı yalnız yerel `exp` ile ölçüyordu, yani
+ölü token cache'te "geçerli" görünüp sonsuza dek servis ediliyordu — her çağrı 401,
+hiçbir şey kendiliğinden düzelmiyor. Üstelik hata ipucu "bir sonraki çağrı zinciri
+yeniden koşturur" diyordu; silme olmadan bu bir **yalandı**. Düzeltildi:
+`auth_guarded` `MhrsAuthRequired`'da kayıtlı JWT'yi siler (e-Nabız cookie'lerine
+dokunmadan), böylece ipucu doğru olur.
+
+**Ders:** yerel bir `exp` "sunucu bunu kabul eder" demek değildir. Token dışarıdan
+her an iptal edilebiliyorsa tek geçerlilik testi sunucunun cevabıdır.
+
 ### Aşırı-sorgu kodları — kanıt durumu eşit DEĞİL
 
 **`RNDS1010` — DOĞRULANDI.** Canlı build 2.1.405'te 17 çağrı yerinde geçiyor.

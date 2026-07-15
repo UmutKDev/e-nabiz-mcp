@@ -97,6 +97,69 @@ def test_auth_guarded_mhrs_auth_required_is_not_swallowed_by_mhrs_error():
     assert out["kodu"] == "LGN1004"
 
 
+def test_auth_guarded_drops_dead_jwt_so_next_call_can_recover(tmp_path, monkeypatch):
+    """`MhrsAuthRequired` kayıtlı JWT'yi SİLMELİ — ipucunun doğru olmasının şartı.
+
+    CANLIDA ölçülen sorun: `mhrs_session` canlılığı yalnız yerel `exp` ile ölçüyor ve
+    `exp` güvenilir değil — JWT yerel olarak 19.6 saat geçerli görünürken sunucu 401
+    verdi (sebep: kullanıcı tarayıcıdan MHRS'ye girmiş, MHRS tek oturum tutuyor).
+
+    Silme olmasa cache ölü token'ı sonsuza dek servis eder: `exp` geçmediği için
+    `mhrs_session` aynı ölü JWT'yi döndürür, her çağrı 401 alır, hiçbir şey
+    kendiliğinden düzelmez — ve "bir sonraki çağrı zinciri yeniden koşturur" ipucu
+    bir YALAN olur.
+    """
+    from enabiz_mcp.config import Config
+    from enabiz_mcp.mhrs import auth as mhrs_auth
+    from enabiz_mcp.mhrs.auth import MhrsAuthRequired, MhrsSession
+
+    cfg = Config(
+        tc_kimlik_no=None,
+        sifre=None,
+        session_path=tmp_path / "session.json",
+        min_interval=0.0,
+        mhrs_min_interval=0.0,
+    )
+    monkeypatch.setattr(Config, "from_env", classmethod(lambda _c: cfg))
+    mhrs_auth.save_mhrs_session(cfg, MhrsSession(jwt="olu.jwt.imza", exp=9e9))
+    assert mhrs_auth.load_mhrs_session(cfg) is not None  # önce VAR
+
+    @auth_guarded
+    def boom() -> dict:
+        raise MhrsAuthRequired("MHRS oturumu reddedildi (HTTP 401).", None)
+
+    out = boom()
+    assert out["error"] == "auth_required"
+    assert mhrs_auth.load_mhrs_session(cfg) is None, "ölü JWT cache'te kaldı"
+
+
+def test_auth_guarded_drop_keeps_enabiz_cookies(tmp_path, monkeypatch):
+    """MHRS token'ı silinirken e-Nabız cookie'leri HAYATTA kalmalı — ortak dosya."""
+    from enabiz_mcp import auth as enabiz_auth
+    from enabiz_mcp.config import Config
+    from enabiz_mcp.mhrs import auth as mhrs_auth
+    from enabiz_mcp.mhrs.auth import MhrsAuthRequired, MhrsSession
+
+    cfg = Config(
+        tc_kimlik_no=None,
+        sifre=None,
+        session_path=tmp_path / "session.json",
+        min_interval=0.0,
+        mhrs_min_interval=0.0,
+    )
+    monkeypatch.setattr(Config, "from_env", classmethod(lambda _c: cfg))
+    enabiz_auth.write_session_file(cfg, {"cookies": [{"name": "x", "value": "y"}]})
+    mhrs_auth.save_mhrs_session(cfg, MhrsSession(jwt="olu.jwt.imza", exp=9e9))
+
+    @auth_guarded
+    def boom() -> dict:
+        raise MhrsAuthRequired("401", None)
+
+    boom()
+    assert mhrs_auth.load_mhrs_session(cfg) is None
+    assert enabiz_auth.read_session_file(cfg).get("cookies"), "e-Nabız cookie'leri silindi!"
+
+
 def test_auth_guarded_generic_mhrs_error_keeps_code():
     """Sınıflanamayan MHRS hatası kodu MODELE taşımalı — 'bilinmeyen hata' demesin."""
     from enabiz_mcp.mhrs.auth import MhrsError
