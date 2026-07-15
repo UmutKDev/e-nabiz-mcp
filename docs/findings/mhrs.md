@@ -143,6 +143,10 @@ Tüm uçlar aynı zarfı döner:
 | `RNDS1000` | **Anti-bot kilidi (⚠️ DOĞRULANMADI).** "Hayatın olağan akışına aykırı şekilde çok fazla randevu sorgulaması yaptınız… Alo 182'yi arayınız" | **Retry YOK — sert dur.** Ayrıntı aşağıda. |
 | `LGN2001` | Oturum başka cihazdan sonlandırıldı | MHRS **tek aktif oturum** tutar — ✅ canlıda gözlendi, ama BEKLENENİN TERSİ yönde: kullanıcının tarayıcıdan girişi BİZİM token'ı öldürdü. Bkz. aşağısı. |
 | `LGN1004` | Oturum süresi doldu | Zinciri baştan koştur. |
+| `RND4033` | **"Sonuç yok" — hata DEĞİL.** Aradığınız kriterlere randevu yok; alternatif hastaneden en erken şu tarihte alınabilir | HTTP **428** + `success: true` ile gelir, `data.hastane` BOŞ, `data.alternatif` DOLU. Uyarı modele taşınmalı. |
+| `RND4037` | Aile hekimi öncelik kontenjanı bilgisi | Bilgilendirme. |
+| `RNDI1004` | Randevunun durumu iptale uygun değil | Zaten iptal edilmiş olabilir (`Geri Alınabilir`). |
+| `GNL2030` | "Talep oluşturmak ister misiniz?" onay metni | `yonetim/genel/mesaj/by-kodu/GNL2030` |
 
 ### ⚠️ JWT `exp`'i GÜVENİLİR DEĞİL — tek oturum (canlıda ölçüldü)
 
@@ -415,3 +419,43 @@ Resmî API dokümanı yok. Swagger UI var ama kimlik-korumalı
 İkisi de parola login'i (`kullaniciAdi`/`parola`/`islemKanali: VATANDAS_WEB`/
 `girisTipi: PAROLA`) kullanır — bizim SSO zincirimizden farklı. Refresh yapmazlar;
 `LGN1004` görünce sıfırdan login olurlar.
+
+
+## Randevu bulunamadığında — talep akışı (canlı senaryodan)
+
+Bursa Şehir Hastanesi / Nöroloji araması şunu döndürüyor:
+
+```
+HTTP 428 · success: true
+warnings: [RND4033 (sonuç yok, alternatiften en erken 30.07 09:50), RND4037 (aile hekimi bilgisi)]
+data: {hastane: [], semt: [], alternatif: [1 aday], acilacakSekme: 1}
+```
+
+Üç ders:
+
+**1. 428 hata değil.** `success: true` ve veri DOLU. 428'i başarısızlık sayan bir
+istemci sunucunun döndürdüğü alternatifleri ve açıklamayı çöpe atar.
+
+**2. Uyarı düşürülemez.** `hastane: []` + sessizlik = "bulunamadı, sebep bilinmiyor".
+`RND4033` sebebi VE çözümü söylüyor. Mesajlar HTML içerir (`<font>`, `<b>`, `<br>`) —
+sökülmeli.
+
+**3. `randevuAlinabilir: false` ≠ `bos: false`.** Alternatif aday `bos: true,
+bosKapasite: 1` derken `randevuAlinabilir: false` olabiliyor. İkisi ayrı sorulardır;
+yalnız `bos`'a bakan bir istemci alınamayacak bir randevuya yönelir.
+
+Ayrıca `kurum.ilIlce` ALT nesnedir — `kurum.mhrsIlceId` YOKTUR (parser bir tur bunu
+`None` okuyordu).
+
+### Talep uçları
+
+| Uç | Not |
+|---|---|
+| `GET kurum/randevu-talep/search` | liste — **`data.data`** (zarfın data'sının içinde bir data daha) |
+| `POST kurum/randevu-talep` | oluştur — `{lhatirlatmaSaatSecimi, mhrsHekimId, mhrsKlinikId, mhrsKurumId, muayeneYeriId}` |
+| `DELETE kurum/randevu-talep/{id}` | sil — `talepSilinebilir` ise |
+| `POST kurum/randevu-talep/yenile/{id}` | yenile — `yenilenebilir` ise (tool YOK) |
+| `GET yonetim/genel/lookup/selectinput/HATIRLATMA_SAAT_SECIMI` | hatırlatma saati seçenekleri (tool YOK; sabit `"1"` gönderiliyor) |
+
+Talep bir randevu DEĞİLDİR: slot tutmaz, 15 günlük branş yasağı riski taşımaz. Ama
+sunucuda kalıcı kayıt açar ve bildirim tetikler → yazma, `confirm=True` ister.

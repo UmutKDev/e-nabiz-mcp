@@ -17,6 +17,7 @@ yok — yalnız eşiği derinleştirir.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from fastmcp import FastMCP
@@ -146,20 +147,35 @@ def _gun(raw: Any) -> dict | None:
 
 
 def _aday(raw: Any) -> dict | None:
-    """Arama sonucundaki bir adayı indirger — `aksiyon_id` slot çağrısının anahtarı."""
+    """Arama sonucundaki bir adayı indirger — `aksiyon_id` slot çağrısının anahtarı.
+
+    İl/ilçe `kurum.ilIlce` ALTINDADIR, `kurum`'un kendisinde değil — canlı yanıtta
+    ölçüldü; `kurum["mhrsIlceId"]` her zaman `None` dönüyordu.
+
+    `randevu_alinabilir` KRİTİK: sunucu `bos: true, bosKapasite: 1` diyip aynı anda
+    `randevuAlinabilir: false` diyebiliyor (alternatif hastane adaylarında görüldü).
+    Taşınmazsa model "boş slot var" sanıp alınamayacak bir randevuya yönelir.
+    """
     if not isinstance(raw, dict):
         return None
     kurum = raw.get("kurum") if isinstance(raw.get("kurum"), dict) else {}
+    ililce = kurum.get("ilIlce") if isinstance(kurum.get("ilIlce"), dict) else {}
     klinik = raw.get("klinik") if isinstance(raw.get("klinik"), dict) else {}
     hekim = raw.get("hekim") if isinstance(raw.get("hekim"), dict) else {}
     aksiyon = raw.get("aksiyon") if isinstance(raw.get("aksiyon"), dict) else {}
+    my = raw.get("muayeneYeri") if isinstance(raw.get("muayeneYeri"), dict) else {}
     if not kurum.get("mhrsKurumId"):
         return None
     ad = " ".join(str(hekim[k]) for k in ("ad", "soyad") if hekim.get(k)).strip()
     out = {
         "kurum_id": str(kurum["mhrsKurumId"]),
         "kurum_adi": str(kurum["kurumAdi"]) if kurum.get("kurumAdi") else None,
-        "ilce_id": str(kurum["mhrsIlceId"]) if kurum.get("mhrsIlceId") else None,
+        "ana_kurum_id": (
+            str(kurum["mhrsAnaKurumId"]) if kurum.get("mhrsAnaKurumId") is not None else None
+        ),
+        "il_id": str(ililce["mhrsIlId"]) if ililce.get("mhrsIlId") else None,
+        "ilce_id": str(ililce["mhrsIlceId"]) if ililce.get("mhrsIlceId") else None,
+        "ilce_adi": str(ililce["ilceAdi"]) if ililce.get("ilceAdi") else None,
         "klinik_id": str(klinik["mhrsKlinikId"]) if klinik.get("mhrsKlinikId") else None,
         "klinik_adi": str(klinik["mhrsKlinikAdi"]) if klinik.get("mhrsKlinikAdi") else None,
         "cetvel_tipi": (
@@ -167,10 +183,42 @@ def _aday(raw: Any) -> dict | None:
         ),
         "hekim": ad or None,
         "hekim_id": str(hekim["mhrsHekimId"]) if hekim.get("mhrsHekimId") else None,
+        "muayene_yeri": str(my["adi"]) if my.get("adi") else None,
+        "muayene_yeri_id": str(my["id"]) if my.get("id") is not None else None,
         "aksiyon_id": str(aksiyon["id"]) if aksiyon.get("id") is not None else None,
         "en_erken": str(raw["baslangicZamani"]) if raw.get("baslangicZamani") else None,
+        "bos": str(raw["bos"]) if raw.get("bos") is not None else None,
+        "randevu_alinabilir": (
+            str(raw["randevuAlinabilir"]) if raw.get("randevuAlinabilir") is not None else None
+        ),
     }
     return {k: v for k, v in out.items() if v is not None}
+
+
+def _mesaj(raw: Any) -> str | None:
+    """Sunucu mesajından HTML'i söker — mesajlar `<font>`, `<b>`, `<br>` içeriyor."""
+    if not isinstance(raw, str):
+        return None
+    t = re.sub(r"<br\s*/?>", " ", raw, flags=re.IGNORECASE)
+    t = re.sub(r"<[^>]+>", "", t)
+    return re.sub(r"\s+", " ", t).strip() or None
+
+
+def _uyarilar(body: Any) -> list[dict]:
+    """Zarfın `warnings[]`/`infos[]`'unu modele taşınabilir hâle getirir.
+
+    Bunlar düşürülemez: `RND4033` "aradığınız kriterlere randevu YOK, en erken şu
+    tarihte alternatif hastaneden alabilirsiniz" der ve `data.hastane` BOŞ gelir.
+    Uyarı olmadan model yalnız boş bir liste görür ve NEDENİNİ söyleyemez.
+    """
+    if not isinstance(body, dict):
+        return []
+    out: list[dict] = []
+    for kova in ("warnings", "infos"):
+        for w in body.get(kova) or []:
+            if isinstance(w, dict) and (m := _mesaj(w.get("mesaj"))):
+                out.append({"kodu": w.get("kodu"), "mesaj": m})
+    return out
 
 
 _NO_POLL = (
@@ -202,6 +250,21 @@ def register(mcp: FastMCP) -> None:
         - `clinic_id` / `province_id`: `enabiz_mhrs_list_clinics` / `list_provinces`'ten.
         - `district_id` / `institution_id` / `doctor_id`: verilmezse "farketmez".
 
+        Sonuçlar üç GRUBA ayrılır (`grup` alanı):
+        - `hastane` — aradığınız kriterlere uyan kurumlar
+        - `semt` — semt poliklinikleri
+        - `alternatif` — **başka** hastaneler; istediğiniz kurumda yer yoksa MHRS
+          bunları önerir. Aday `randevu_alinabilir: "False"` taşıyabilir — o zaman
+          `bos: "True"` olsa bile randevu ALINAMAZ.
+
+        `notices` alanını MUTLAKA kullanıcıya aktarın: `hastane` boş dönüp
+        `alternatif` doluysa sebebini orası söyler (ör. `RND4033` = "aradığınız
+        kriterlere randevu yok, en erken şu tarihte alternatif hastaneden").
+        Boş liste + sessizlik, "hata var" gibi görünür; oysa sunucu açıklıyor.
+
+        Uygun randevu yoksa `enabiz_mhrs_create_request` ile MHRS'ye **talep**
+        bırakılabilir — yer açılınca haber verir.
+
         Gövdeli POST'tur ama okumadır; randevu ALMAZ.
         """
         cfg = Config.from_env()
@@ -220,18 +283,25 @@ def register(mcp: FastMCP) -> None:
             "randevuZamaniList": [],
         }
         with api_client(cfg, session.jwt) as client:
-            data = unwrap(client.post(ARAMA_PATH, json=body))
+            resp = client.post(ARAMA_PATH, json=body)
+            # `unwrap` hata yollarını korur ama yalnız `data` döndürür; uyarılar
+            # zarfta kalır ve RND4033 gibi kodlar boş sonucu AÇIKLAYAN tek şeydir.
+            # Sunucu bunları HTTP 428 + `success: true` ile de gönderebiliyor.
+            data = unwrap(resp)
+            notices = _uyarilar(resp.json())
 
-        if not isinstance(data, dict):
-            return {"count": 0, "candidates": [], "note": _NO_POLL}
         adaylar: list[dict] = []
-        for bucket in ("hastane", "semt", "alternatif"):
-            for x in data.get(bucket) or []:
-                a = _aday(x)
-                if a:
-                    a["grup"] = bucket
-                    adaylar.append(a)
-        return {"count": len(adaylar), "candidates": adaylar, "note": _NO_POLL}
+        if isinstance(data, dict):
+            for bucket in ("hastane", "semt", "alternatif"):
+                for x in data.get(bucket) or []:
+                    a = _aday(x)
+                    if a:
+                        a["grup"] = bucket
+                        adaylar.append(a)
+        out = {"count": len(adaylar), "candidates": adaylar, "note": _NO_POLL}
+        if notices:
+            out["notices"] = notices
+        return out
 
     @mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": True})
     @auth_guarded

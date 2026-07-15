@@ -24,6 +24,7 @@ from .tools import (
     medications,
     mhrs_appointments,
     mhrs_booking,
+    mhrs_requests,
     mhrs_search,
     mhrs_slots,
     pathology,
@@ -121,6 +122,7 @@ profile.register(mcp)
 mhrs_search.register(mcp)
 mhrs_appointments.register(mcp)
 mhrs_slots.register(mcp)
+mhrs_requests.register(mcp)
 # YAZMA — projenin tek yazma yüzeyi (login dışında). D7.
 mhrs_booking.register(mcp)
 
