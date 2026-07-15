@@ -2,12 +2,14 @@
 
 > Otomatik üretildi (`scripts/discover_mhrs.py`). Yalnız public statik JS okunarak çıkarıldı — **kimlik doğrulama YOK, `/api/`'ye istek YOK, PHI YOK**. Ham bundle `docs/findings/raw/mhrs/`'de (gitignored).
 
-**Özet:** build_version: 2.1.405 · chunks_found: 87 · chunks_scanned: 91 · endpoints: 151 · read: 71 · write: 68 · unknown: 12
+**Özet:** build_version: 2.1.405 · chunks_read: 87 · source: kayıtlı bundle (--from-raw) · endpoints: 161 · read: 75 · write: 74 · unknown: 12
 
 > ⚠️ **Yazma uçları aşağıda LİSTELENİR ama keşif tarayıcısı tarafından ASLA çağrılmaz.** Belgelemek çağırmak değildir. MHRS 12 ucu GET ile yazar (`iptal-et`, `geri-al`, `ayni-hekimden-randevu-al`), bu yüzden HTTP metodu güvenlik sinyali olarak kullanılamaz — sınıflama ad-bazlıdır.
 
 | Method | Yol (route şablonu) | Verdict | Kaynak |
 |---|---|---|---|
+| POST | `kurum-rss/randevu/slot-sorgulama/arama` | read | chunk-45 |
+| POST | `kurum-rss/randevu/slot-sorgulama/slot` | read | chunk-45 |
 | GET | `kurum/genel-arama` | read | chunk-45 |
 | GET | `kurum/hekim/hekim-klinik/hekim-select-input/anakurum/{p1}/kurum/{p2}/klinik/{p3}` | read | chunk-18 |
 | GET | `kurum/hekim/hekim-klinik/sorgula-by-hekim` | read | chunk-35 |
@@ -70,6 +72,7 @@
 | GET | `vatandas/bildirim/iletisim-kontrol` | read | chunk-45 |
 | GET | `vatandas/bildirim/login-uyari` | read | chunk-45 |
 | GET | `vatandas/dil` | read | main |
+| PUT | `vatandas/dil/dil-bilgileri/{p1}` | 🔴 write | main |
 | POST | `vatandas/edevlet/after-login` | 🔴 write | main |
 | POST | `vatandas/edevlet/login` | 🔴 write | main |
 | GET | `vatandas/edevlet/login-url` | unknown | main |
@@ -81,9 +84,16 @@
 | PUT | `vatandas/favori/en-ustte/{p1}` | 🔴 write | chunk-35 |
 | DELETE | `vatandas/favori/{p1}` | 🔴 write | chunk-35 |
 | GET | `vatandas/gizlilik-politikalari` | unknown | chunk-38 |
+| GET | `vatandas/hesap-bilgileri/bilgilendirme-tercihleri` | read | chunk-28 |
+| PUT | `vatandas/hesap-bilgileri/bilgilendirme-tercihleri` | 🔴 write | chunk-28 |
 | GET | `vatandas/hesap-bilgileri/guvenlik-resimleri` | read | chunk-20 |
+| POST | `vatandas/hesap-bilgileri/guvenlik-soru-resim` | 🔴 write | chunk-23 |
 | GET | `vatandas/hesap-bilgileri/kullanici-temasi` | read | main |
+| PUT | `vatandas/hesap-bilgileri/parola-degistir` | 🔴 write | chunk-31 |
 | GET | `vatandas/hesap-bilgileri/son-giris-bilgileri` | read | chunk-32 |
+| GET | `vatandas/hesap-bilgileri/tema-bilgileri` | read | chunk-12 |
+| PUT | `vatandas/hesap-bilgileri/tema-dil-bilgileri/{p1}/` | 🔴 write | chunk-45 |
+| PUT | `vatandas/hesap-bilgileri/tema-dil-bilgileri/{p1}/{p2}` | 🔴 write | chunk-12 |
 | POST | `vatandas/iki-asamali-giris/sms-dogrulama-key-onay` | 🔴 write | chunk-47 |
 | POST | `vatandas/iletisim/dogrulama/gonder` | 🔴 write | chunk-21 |
 | POST | `vatandas/iletisim/dogrulama/yap` | 🔴 write | chunk-21 |
@@ -160,7 +170,7 @@
 | GET | `yonetim/genel/parametre/degeri/SLOT_LISTELEME_MAX_GUN_WEB` | read | chunk-45 |
 | GET | `yonetim/genel/parametre/degeri/UYE_OL_BUTON_GORUNURLUK` | read | chunk-47 |
 
-## Yazma uçları (68) — tool ÇAĞIRMAZ
+## Yazma uçları (74) — tool ÇAĞIRMAZ
 
 - `POST kurum/kurum/duyuru-kurum/goster`
 - `POST kurum/randevu-notlari`
@@ -190,6 +200,7 @@
 - `POST kurum/randevu/randevu-talep-eslesme-red/{p1}`
 - `DELETE kurum/randevu/slot-kilitleme`
 - `POST kurum/rapor/bashekim-sms-rapor-detay/{p1}/`
+- `PUT vatandas/dil/dil-bilgileri/{p1}`
 - `POST vatandas/edevlet/after-login`
 - `POST vatandas/edevlet/login`
 - `POST vatandas/enabiz/after-login`
@@ -198,6 +209,11 @@
 - `PUT vatandas/favori/ekle`
 - `PUT vatandas/favori/en-ustte/{p1}`
 - `DELETE vatandas/favori/{p1}`
+- `PUT vatandas/hesap-bilgileri/bilgilendirme-tercihleri`
+- `POST vatandas/hesap-bilgileri/guvenlik-soru-resim`
+- `PUT vatandas/hesap-bilgileri/parola-degistir`
+- `PUT vatandas/hesap-bilgileri/tema-dil-bilgileri/{p1}/`
+- `PUT vatandas/hesap-bilgileri/tema-dil-bilgileri/{p1}/{p2}`
 - `POST vatandas/iki-asamali-giris/sms-dogrulama-key-onay`
 - `POST vatandas/iletisim/dogrulama/gonder`
 - `POST vatandas/iletisim/dogrulama/yap`

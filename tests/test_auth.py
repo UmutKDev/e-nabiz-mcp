@@ -59,3 +59,52 @@ def test_auth_guarded_passes_through_success():
         return {"ok": True}
 
     assert ok() == {"ok": True}
+
+
+# --------------------------------------------------------------------------- #
+# MHRS hataları — `except` SIRASI davranıştır
+# --------------------------------------------------------------------------- #
+def test_auth_guarded_rate_limited_is_not_swallowed_by_mhrs_error():
+    """RNDS1000 `rate_limited` dönmeli — `mhrs_error` DEĞİL.
+
+    `MhrsRateLimited` bir `MhrsError` alt sınıfıdır; `except MhrsError` önce
+    yazılırsa RNDS1000 onun içine düşer ve "TEKRAR DENEMEYİN" ipucu SESSİZCE
+    kaybolur. Model o ipucu olmadan kilidi geçici hata sanıp döngüye girer — ve
+    döngü kullanıcıyı online randevudan tamamen çıkarır. Bu test o sırayı kilitler.
+    """
+    from enabiz_mcp.mhrs.auth import MhrsRateLimited
+
+    @auth_guarded
+    def boom() -> dict:
+        raise MhrsRateLimited("çok fazla sorgu", "RNDS1000")
+
+    out = boom()
+    assert out["error"] == "rate_limited"
+    assert out["kodu"] == "RNDS1000"
+    assert "TEKRAR DENEMEYİN" in out["hint"]
+
+
+def test_auth_guarded_mhrs_auth_required_is_not_swallowed_by_mhrs_error():
+    """LGN1004/LGN2001 `auth_required` dönmeli — aynı alt-sınıf tuzağı."""
+    from enabiz_mcp.mhrs.auth import MhrsAuthRequired
+
+    @auth_guarded
+    def boom() -> dict:
+        raise MhrsAuthRequired("oturum yok", "LGN1004")
+
+    out = boom()
+    assert out["error"] == "auth_required"
+    assert out["kodu"] == "LGN1004"
+
+
+def test_auth_guarded_generic_mhrs_error_keeps_code():
+    """Sınıflanamayan MHRS hatası kodu MODELE taşımalı — 'bilinmeyen hata' demesin."""
+    from enabiz_mcp.mhrs.auth import MhrsError
+
+    @auth_guarded
+    def boom() -> dict:
+        raise MhrsError("slot dolmuş", "RND4105")
+
+    out = boom()
+    assert out["error"] == "mhrs_error"
+    assert out["kodu"] == "RND4105"

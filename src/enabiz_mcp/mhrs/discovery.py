@@ -40,14 +40,42 @@ API_BASE = "https://prd.mhrs.gov.tr/api/"
 # Gerçek API yollarının ilk segmenti. ALLOWLIST'tir, heuristik değil: naif bir
 # "slash içeren string" taraması Draft.js'in CSS classname'lerini
 # (`public/DraftStyleDefault/block`) API sanır — canlı bundle'da 20 yanlış pozitif.
-API_PREFIXES = ("vatandas/", "kurum/", "yonetim/")
+#
+# `kurum-rss/` AYRI bir prefix'tir, `kurum/`'un alt kümesi DEĞİL. Bu allowlist bir
+# tur `("vatandas/", "kurum/", "yonetim/")` olarak koştu ve slot arama uçlarının
+# İKİSİNİ DE — yani Faz 2'nin tüm çekirdeğini — sessizce düşürdü: `kurum-rss/...`
+# hiçbir prefix'le başlamıyordu, eşleşmedi, rapora hiç girmedi. Boşluk yalnız
+# "kaçan uç var mı" diye bundle'ı elle tarayınca görüldü; rapor 151 uçla eksiksiz
+# GÖRÜNÜYORDU. Allowlist daralttığı için güvenli, ama sessizce daraltıyor: yeni bir
+# prefix eklemeden önce `tests/test_mhrs_discovery.py::test_no_unknown_api_prefixes`
+# taramasını koştur.
+API_PREFIXES = ("vatandas/", "kurum/", "kurum-rss/", "yonetim/")
 
 Verdict = Literal["read", "write", "unknown"]
 
-# Metodla yazma: POST/PUT/DELETE asla otomatik çağrılmaz. Temkinli bir kural —
-# MHRS bazı POST'ları sorgu için kullanır (`vatandas/uyelik/kontrol`) — ama
-# yanılmanın güvenli yönü budur.
+# Metodla yazma: POST/PUT/DELETE varsayılan olarak yazma sayılır ve asla otomatik
+# çağrılmaz. Temkinli bir kural; yanılmanın güvenli yönü budur.
 WRITE_METHODS = frozenset({"POST", "PUT", "DELETE"})
+
+# POST ile OKUYAN uçlar — DAR ve ELLE İNCELENMİŞ istisna listesi.
+#
+# MHRS slot aramayı gövdeli POST ile yapar (filtre nesnesi query string'e sığmıyor).
+# Metot kapısı tek başına bunları "write" sayar; `_forbid_write` da onları bloklardı
+# — yani Faz 2'nin çekirdek OKUMASI kendi güvenlik kapımıza takılırdı.
+#
+# Bu bir gevşetme değil, adı adı sayılmış bir istisna: varsayılan hâlâ "POST = yazma".
+# Buraya bir uç eklemek insan incelemesi gerektirir; ölçüt "sunucuda durum
+# değiştirmiyor mu", "adı okuma gibi mi" DEĞİL. Yazma sözcüğü taşıyan bir yol
+# buraya konsa bile `_WRITE_TOKENS` kapısı önce koşar ve yazma damgası kazanır
+# (bkz. `classify_mhrs_call` sırası + `test_read_posts_carry_no_write_token`).
+_READ_POSTS = frozenset(
+    {
+        # Kurum/klinik arama — filtre gövdesi (il/ilçe/klinik/kurum/zaman).
+        "kurum-rss/randevu/slot-sorgulama/arama",
+        # Slot listesi — Faz 2'nin kalbi; seçilen kurum+klinik için boş saatler.
+        "kurum-rss/randevu/slot-sorgulama/slot",
+    }
+)
 
 # GET ile YAZAN uçlar için ad-bazlı denylist. Bunlar olmadan replay randevu alır.
 #
@@ -201,9 +229,18 @@ def extract_chunk_template(main_js: str) -> ChunkTemplate | None:
 # --------------------------------------------------------------------------- #
 # axios çağrı çıkarımı
 # --------------------------------------------------------------------------- #
-_PREFIX_ALT = "|".join(p.rstrip("/") for p in API_PREFIXES)
+# UZUN prefix ÖNCE: `kurum|kurum-rss` sırasıyla motor "kurum-rss/x" için önce `kurum`
+# alternatifini dener, ardından gelen `/`'i bulamaz ve ancak backtrack ederek
+# `kurum-rss`'e ulaşır. Python re bunu yapar, ama davranışı backtracking'e bağlamak
+# gereksiz bir kırılganlık — uzunluğa göre sıralamak eşleşmeyi sıradan bağımsız kılar.
+_PREFIX_ALT = "|".join(sorted((p.rstrip("/") for p in API_PREFIXES), key=len, reverse=True))
+# `/?` — baştaki slash İSTEĞE BAĞLI. Bundle her iki biçimi de kullanıyor: çoğu çağrı
+# relatiftir (`.get("vatandas/dil")`), ama hesap-bilgileri ekranları ve main.js'teki
+# dil ucu baştan slash'lı yazılmış (`.put("/vatandas/dil/dil-bilgileri/")`). axios
+# ikisini de aynı `baseURL`'e göre çözer, yani AYNI uçturlar. `/?` olmadan 7 uç —
+# `parola-degistir` dahil — haritaya hiç girmiyordu.
 _CALL_RE = re.compile(
-    rf"""\.(get|post|put|delete)\(\s*["']((?:{_PREFIX_ALT})/[^"']*)["']""",
+    rf"""\.(get|post|put|delete)\(\s*["'](/?(?:{_PREFIX_ALT})/[^"']*)["']""",
     re.IGNORECASE,
 )
 # Literal'i izleyen `.concat(...)` zinciri — ara-parametreli route'lar için.
@@ -291,7 +328,10 @@ def extract_calls(js: str, source: str = "") -> list[MhrsCall]:
 
     for m in _CALL_RE.finditer(js):
         method = m.group(1).upper()
-        literal = m.group(2)
+        # Baştaki slash NORMALLEŞTİRİLİR: `/vatandas/dil` ile `vatandas/dil` axios'ta
+        # aynı uçtur, ama tekilleştirme string'e baktığı için normalleştirilmezse iki
+        # ayrı satır olarak rapora düşer ve uç sayısını şişirir.
+        literal = m.group(2).lstrip("/")
 
         # Literal'i izleyen `.concat(...)` zincirini topla.
         args: list[str] = []
@@ -323,23 +363,25 @@ def _strip_query(path: str) -> str:
 def classify_mhrs_call(method: str, path: str) -> Verdict:
     """Bir MHRS çağrısını 'read' / 'write' / 'unknown' olarak sınıflar.
 
-    İki kapı, ikisi de yazma lehine:
+    Kapılar, SIRAYLA — sıra davranışın parçasıdır:
 
-    1. **Metod**: POST/PUT/DELETE → her zaman 'write'.
-    2. **Ad**: TÜM yolda (son segmentte değil — MHRS'de fiil ortadadır) bir yazma
-       sözcüğü varsa 'write'.
+    1. **Ad**: TÜM yolda (son segmentte değil — MHRS'de fiil ortadadır) bir yazma
+       sözcüğü varsa 'write'. Bu kapı ÖNCE koşar ki `_READ_POSTS` istisnası bir
+       yazma sözcüğünü asla ezemesin — istisna listesine yanlışlıkla `.../iptal-et`
+       konsa bile yazma damgası kazanır.
+    2. **Metod**: POST/PUT/DELETE → 'write'; tek çıkış `_READ_POSTS` (gövdeli arama).
+    3. **Okuma sözcüğü** → 'read'. Hiçbiri yoksa 'unknown' (temkinli: replay EDİLMEZ).
 
-    Sonra okuma sözcüğü → 'read'. Hiçbiri yoksa 'unknown' (temkinli: replay EDİLMEZ).
-
-    GET'in güvenli olduğunu VARSAYMAZ. Canlı MHRS'de 12 uç GET ile yazar:
-    `iptal-et`, `geri-al`, `gizle`, `onayla`, `reddet`, `bilgilendir` ve en
-    tehlikelisi `ayni-hekimden-randevu-al` — GET ile randevu alır.
+    GET'in güvenli olduğunu VARSAYMAZ: canlı MHRS'de 12 uç GET ile yazar (`iptal-et`,
+    `geri-al`, `gizle`, `onayla`, `reddet`, `bilgilendir` ve en tehlikelisi
+    `ayni-hekimden-randevu-al` — GET ile randevu alır). Simetrik olarak POST'un
+    yazdığını da varsaymaz: slot arama gövdeli bir OKUMA'dır.
     """
-    if method.upper() in WRITE_METHODS:
-        return "write"
     clean = _strip_query(path)
     if _WRITE_TOKENS.search(clean):
         return "write"
+    if method.upper() in WRITE_METHODS:
+        return "read" if clean in _READ_POSTS else "write"
     if _READ_TOKENS.search(clean):
         return "read"
     return "unknown"

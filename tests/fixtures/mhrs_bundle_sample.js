@@ -43,6 +43,21 @@ v.a.get("kurum/randevu-ozellik/gizle/".concat(e));
 b.a.get("yonetim/genel/parametre/degeri/RIS_RANDEVU_AL_ADIMI");
 b.a.get("yonetim/genel/parametre/degeri/SLOT_LISTELEME_MAX_GUN_WEB");
 
+// --- `kurum-rss/` prefix'i: gövdeli POST ile OKUMA (slot arama) ---
+// Gerçek kaçak. Allowlist `("vatandas/","kurum/","yonetim/")` iken bu iki uç
+// eşleşmedi ve rapora HİÇ girmedi — üstelik Faz 2'nin tüm çekirdeği bunlar.
+// "kurum-rss" ile "kurum" kardeş prefix'lerdir; biri ötekinin alt kümesi değil.
+var E=function(e,t,n){g.a.post("kurum-rss/randevu/slot-sorgulama/arama",e).then((function(e){e.data.success&&t(e.data.data)})).catch((function(e){return n(e)}))};
+var P=function(e,t,n,r,o,i){g.a.post("kurum-rss/randevu/slot-sorgulama/slot",e).then((function(t){n(t.data.data)}))};
+
+// --- BAŞTAN SLASH'lı çağrılar: axios aynı baseURL'e çözer, AYNI uçturlar ---
+// İkinci gerçek kaçak. Çıkarıcı literalin prefix'le BAŞLAMASINI şart koşuyordu;
+// baştan slash'lı 7 uç (`parola-degistir` dahil) haritaya hiç girmedi. Denetçi de
+// aynı kör noktayı paylaşıyordu — kör noktayı arayan araç aynı kör noktaya sahipse
+// hiçbir şey bulmaz.
+h.a.get("/vatandas/hesap-bilgileri/tema-bilgileri").then((function(e){}));
+h.a.put("/vatandas/hesap-bilgileri/parola-degistir",e).then((function(e){}));
+
 // --- API OLMAYAN: Draft.js CSS classname'leri (yanlış pozitif tuzağı) ---
 var c={block:"public/DraftStyleDefault/block",ltr:"public/DraftStyleDefault/ltr"};
 // --- API OLMAYAN: Map/Set operasyonları (.get/.delete ama axios değil) ---

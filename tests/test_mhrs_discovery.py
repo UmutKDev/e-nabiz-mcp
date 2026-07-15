@@ -81,9 +81,57 @@ def test_mhrs_denylist_catches_kebab_case_randevu_al():
 
 
 @pytest.mark.parametrize("method", ["POST", "PUT", "DELETE"])
-def test_non_get_methods_are_always_write(method):
-    """POST/PUT/DELETE her zaman yazma — adı ne olursa olsun (temkinli)."""
+def test_non_get_methods_are_write_by_default(method):
+    """POST/PUT/DELETE VARSAYILAN olarak yazma — adı okuma gibi görünse bile.
+
+    `uyelik/kontrol` bir sorgudur ve `kontrol` bir okuma sözcüğüdür; yine de yazma
+    sayılır, çünkü `_READ_POSTS` allowlist'inde DEĞİL. Metot kapısının temkinli
+    varsayılanı budur; istisna adı adına incelenerek verilir, ada bakıp tahminle değil.
+    """
     assert m.classify_mhrs_call(method, "vatandas/uyelik/kontrol") == "write"
+
+
+def test_slot_search_posts_are_read_despite_post_method():
+    """Gövdeli POST arama OKUMA'dır — Faz 2'nin çekirdeği buna bağlı.
+
+    Regresyon: metot kapısı tek başına bu ikisini "write" sayıyordu, `_forbid_write`
+    de onları bloklardı — yani kendi güvenlik kapımız Faz 2'nin okuma yolunu
+    kapatıyordu. `slot-sorgulama/slot` boş saatleri LİSTELER, randevu ALMAZ
+    (randevu `kurum/randevu/randevu-ekle` ile alınır ve o yazma olarak KALIR).
+    """
+    assert m.classify_mhrs_call("POST", "kurum-rss/randevu/slot-sorgulama/arama") == "read"
+    assert m.classify_mhrs_call("POST", "kurum-rss/randevu/slot-sorgulama/slot") == "read"
+    # Asıl yazma ucu istisnadan ETKİLENMEZ:
+    assert m.classify_mhrs_call("POST", "kurum/randevu/randevu-ekle") == "write"
+
+
+def test_read_posts_carry_no_write_token():
+    """`_READ_POSTS`'taki hiçbir yol yazma sözcüğü taşımamalı — allowlist'in koruması.
+
+    Ad kapısı metot kapısından ÖNCE koşar, yani bu invaryant bozulsa bile yol yine
+    "write" sınıflanır (istisna ezilemez). Test yine de var: sessiz güvenliğe değil,
+    listenin bilinçli tutulduğuna dair bir alarm.
+    """
+    offenders = [p for p in m._READ_POSTS if m._WRITE_TOKENS.search(p)]
+    assert not offenders, f"_READ_POSTS'ta yazma sözcüğü: {offenders}"
+
+
+def test_read_posts_are_reachable_by_the_extractor():
+    """Allowlist'teki her yol çıkarıcının prefix'lerinden biriyle başlamalı.
+
+    Aksi halde uç rapora hiç girmez ve `_READ_POSTS` girdisi ÖLÜ config olur —
+    tam olarak `kurum-rss/` ile yaşanan hata: istisna anlamlı, ama uç görünmez.
+    """
+    for path in m._READ_POSTS:
+        assert path.startswith(m.API_PREFIXES), f"{path} hiçbir API_PREFIXES ile başlamıyor"
+
+
+def test_write_token_gate_runs_before_method_gate():
+    """Sıra davranıştır: yazma sözcüğü, `_READ_POSTS` istisnasını EZEMEZ.
+
+    Savunma katmanı — allowlist'e yanlışlıkla bir yazma ucu konursa yazma kazansın.
+    """
+    assert m.classify_mhrs_call("POST", "kurum-rss/randevu/iptal-et/{p1}") == "write"
 
 
 def test_underscore_constant_with_AL_is_not_write():
@@ -161,6 +209,75 @@ def test_draftjs_classnames_are_not_extracted(calls):
 def test_map_set_operations_are_not_extracted(calls):
     """`.delete(e.pointerId)` / `.get(t.key)` axios değil — allowlist eler."""
     assert not [p for p in _paths(calls) if "pointerId" in p or p in {"key", "id"}]
+
+
+def test_kurum_rss_prefix_is_extracted(calls):
+    """`kurum-rss/` uçları çıkarılmalı — allowlist bir tur bunları sessizce düşürdü.
+
+    `kurum-rss` ile `kurum` KARDEŞ prefix'lerdir. Allowlist `"kurum/"` istediği için
+    `kurum-rss/...` hiçbir alternatifle eşleşmedi; iki uç da rapora hiç girmedi ve
+    151 satırlık rapor EKSİKSİZ göründü. Kaçan tam olarak Faz 2'nin çekirdeğiydi.
+    """
+    found = {(c.method, c.path) for c in calls}
+    assert ("POST", "kurum-rss/randevu/slot-sorgulama/arama") in found
+    assert ("POST", "kurum-rss/randevu/slot-sorgulama/slot") in found
+
+
+def test_leading_slash_calls_are_extracted_and_normalised(calls):
+    """`/vatandas/x` ile `vatandas/x` AYNI uçtur — çıkarılmalı ve normalleştirilmeli.
+
+    İkinci gerçek kaçak: çıkarıcı literalin prefix'le BAŞLAMASINI şart koşuyordu,
+    baştan slash'lı 7 uç haritaya hiç girmedi — biri `PUT .../parola-degistir`, yani
+    haritada görünmeyen bir parola değiştirme ucu.
+
+    Normalleştirme ayrıca şart: aksi halde iki yazım aynı ucu iki satıra bölerdi.
+    """
+    found = {(c.method, c.path) for c in calls}
+    assert ("GET", "vatandas/hesap-bilgileri/tema-bilgileri") in found
+    assert ("PUT", "vatandas/hesap-bilgileri/parola-degistir") in found
+    # Baştaki slash HİÇBİR yolda kalmamalı:
+    assert not [p for p in _paths(calls) if p.startswith("/")]
+
+
+def test_prefix_alternation_is_order_independent():
+    """`kurum` alternatifi `kurum-rss`'i gölgelememeli — sıraya bel bağlama.
+
+    Python re backtrack ettiği için sıralamasız da çalışır; bu test o davranışa
+    değil, SONUCA bağlanır: hangi sırada yazılırsa yazılsın uzun prefix eşleşir.
+    """
+    assert m._CALL_RE.search('.post("kurum-rss/randevu/slot-sorgulama/slot",e)')
+    assert m._CALL_RE.search('.post("kurum/randevu/randevu-ekle",a)')
+
+
+#: Yol gibi görünen ama API OLMAYAN prefix'ler — Draft.js CSS classname'leri.
+_NON_API_PREFIXES = {"public"}
+
+
+def test_no_unknown_api_prefixes(bundle):
+    """Fixture'da `API_PREFIXES` dışında yol-benzeri bir literal kalmamalı.
+
+    Bu, `kurum-rss` hatasının SINIFINI hedefleyen bekçi: allowlist güvenlidir çünkü
+    daraltır, ama SESSİZCE daraltır — düşen uç hiçbir yerde raporlanmaz. Burada
+    çıkarıcının dar regex'i değil, GENEL bir "prefix/..." deseni taranır; ikisinin
+    farkı allowlist'in kör noktasıdır.
+
+    SINIRI: yalnız fixture'ı korur, canlı bundle'ı değil. Canlı denetim tarama
+    zamanında yapılır — `discover_mhrs.py::audit_unknown_prefixes` her koşuda
+    allowlist dışı prefix görürse yüksek sesle uyarır.
+    """
+    # `/?` — script'teki `_GENERIC_CALL_RE` ile AYNI olmalı. Denetim deseni
+    # çıkarıcının kör noktasını taşırsa hiçbir şey bulmaz; bu tam olarak bir kez
+    # yaşandı (baştan slash'lı 7 uç ikisinden de kaçtı).
+    generic = re.compile(
+        r"""\.(?:get|post|put|delete)\(\s*["']/?([a-z][a-z0-9-]*)/""", re.IGNORECASE
+    )
+    seen = {mm.group(1).lower() for mm in generic.finditer(bundle)}
+    known = {p.rstrip("/") for p in m.API_PREFIXES} | _NON_API_PREFIXES
+    unknown = seen - known
+    assert not unknown, (
+        f"allowlist dışı prefix(ler): {sorted(unknown)} — API ise API_PREFIXES'e ekle, "
+        "değilse _NON_API_PREFIXES'e. Sessizce düşürme."
+    )
 
 
 def test_calls_are_deduplicated(bundle):
