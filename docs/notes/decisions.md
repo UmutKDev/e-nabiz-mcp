@@ -92,3 +92,55 @@ kullanıcının telefondaki oturumunu düşürebilir. Hepsi `docs/findings/mhrs.
 **Kapsam dışı — değişmedi.** reCAPTCHA çözülmez (invaryant #4). Buna gerek de yok:
 `captchaKey` yalnız parola login'inde; kullanılan `enabizToken` SSO zincirinde
 CAPTCHA yoktur.
+
+### D8 — MCP Apps (ext-apps) katmanı: panel PHI'yı model bağlamından çıkarır
+*2026-07-16*
+
+**Karar.** `io.modelcontextprotocol/ui` uzantısı eklendi. Panel render edebilen
+istemcilerde liste tool'ları kayıt DEĞERLERİNİ değil yalnız SAYIYI döner; kayıtlar
+`enabiz_ui_data` (`visibility: ["app"]`) ile panele, modeli baypas ederek gider.
+Panel render edemeyen istemcilerde bugünkü metin çıktısı byte-byte aynı kalır.
+
+**Gerekçe — panel bir süs değil, invaryant #3'ün uygulaması.** "PHI, LLM bağlamına
+girmez" kuralı bugüne dek yalnız *indirme* tool'larında tutuluyordu
+(`downloads.py` içerik yerine `{saved_path, byte_size, sha256, content_type}` döner).
+Liste tool'ları kuralı çiğniyordu: `enabiz_list_lab_tests` tahlil değerlerini
+doğrudan model bağlamına yazıyor. Panel, bu boşluğu kapatan ilk mekanizmadır.
+
+**Yön kasıtlı: belirsizlik metin yoluna düşer.** `ui.app_capable()` bağlam yoksa
+veya istemci uzantıyı ilan etmemişse `False` döner (ölçüldü). Böylece en kötü
+ihtimalle PHI bugünkü gibi modele gider — yani REGRESYON YOK. Ters yön ("panel yok
+ama veri de yok") mümkün değil.
+
+**`ctx` tool imzasına EKLENMEZ.** `app_capable()` bağlamı `get_context()` ile alır.
+İmzaya `ctx: Context` eklemek `tests/test_tools_smoke.py`'ı `TypeError` ile kırdı —
+ölçüldü. Testi düzeltmek yanlış cevaptı: mevcut testin kırılması, metin yolunun
+çağrı sözleşmesini bozduğumuzun kanıtıydı.
+
+**Vendor'lanmış JS varlığı — D1 ihlali DEĞİL.** `src/enabiz_mcp/ui/vendor/ext-apps.js`,
+`@modelcontextprotocol/ext-apps@1.7.4`'ün tarayıcı paketidir (MIT). Repoda npm
+toolchain'i YOK ve olmayacak; bu bir JS *varlığı*, JS *toolchain'i* değil. D1
+TypeScript SDK'sını sunucu dili olarak reddetti — sunucu tarafı hâlâ saf Python
+(`fastmcp.apps`, ek bağımlılık gerekmedi). Vendor zorunlu: iframe CSP'si CDN
+import'unu engeller (paket blank render eder) ve privacy.md §1-2 dış egress
+yasaklar. Kaynaklar `ui://` ile protokol üzerinden servis edilir — HTTP sunucusu
+yok, D3 (stdio-only) korunur. Widget CSP'si `connectDomains: []` — iframe hiçbir
+yere bağlanamaz.
+
+**Türkçe büyütme CSS'e bırakılmaz.** `text-transform: uppercase` `lang`'a bağlıdır
+ve sessizce `NIS`/`DERI TESTI` üretir (doğrusu `NİS`/`DERİ TESTİ`). Ölçüldü —
+tarayıcıda bu hâliyle göründü. Büyütme JS'te açık `toLocaleUpperCase("tr")` ile
+yapılır; ay kısaltmaları zaten büyük sabitlenir. D6'nın ı/i tuzağının CSS hâli.
+Tripwire: `tests/test_ui_resources.py`.
+
+**Açık kalan ölçüm.** "`callServerTool` sonucu modele gitmez" iddiası ext-apps
+dokümanının beyanıdır; CANLI ÖLÇÜLMEDİ. Ölçüm aksini gösterirse app-only PHI
+iddiası geri alınır ve karma moda düşülür (panel görselleştirir, PHI bugünkü gibi
+modele de gider). Bu ölçüm yapılana dek D8'in PHI iddiası KANITLANMAMIŞ sayılır.
+
+**Kapsam dışı.** Uzak/HTTP transport (D3) — dolayısıyla ChatGPT/Claude-web bu
+sunucuya bağlanamaz; engel lehçe değil (ChatGPT 2026-02'den beri standart
+`_meta.ui.*` okuyor), transport. Claude Code panel render etmez (terminal, iframe
+yüzeyi yok) → metin yolu. `prefab_ui`/`fastmcp[apps]` alınmadı (FastMCP kendi
+dokümanında Prefab için "sık kırıcı değişiklik" uyarıyor). `mcp-ui` alınmadı —
+resmi uzantı varken ikinci soyutlama katmanı.

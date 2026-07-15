@@ -1,0 +1,499 @@
+<meta charset="utf-8" />
+<meta name="color-scheme" content="light dark" />
+<style>
+  /* ------------------------------------------------------------------ *
+   * RENK KURALI — bu widget ailesinin tek estetik yasası:
+   *
+   *   RENK YALNIZ KLİNİK ANORMALLİK İÇİN AYRILMIŞTIR.
+   *
+   * Kategori, tür, tarih, kurum — hiçbiri renk almaz; mürekkep ve çizgiyle
+   * ayrışır. Bu widget (alerjiler) bu yüzden TAMAMEN MONOKROMDUR: alerji
+   * kaydının "anormal değeri" yoktur.
+   *
+   * Kazanç `labs.html`'de toplanır: orada `out_of_range` tek renkli şey
+   * olduğu için gerçekten BAĞIRIR. Buraya dekoratif bir aksan rengi
+   * eklerseniz o sinyali sulandırırsınız. Eklemeyin.
+   * ------------------------------------------------------------------ */
+
+  /* TEMA — üç katman, en dıştaki kazanır:
+   *   1. :root                       → açık yedekler
+   *   2. @media prefers-color-scheme → host tema BİLDİRMEZSE koyu yedekler
+   *   3. :root.dark / :root.light    → host bildirdiyse O kazanır (iki yönde de)
+   *
+   * (2) olmadan tasarım tamamen host'un tema bildirmesine bağlı kalıyordu:
+   *  bildirmeyen bir host'ta koyu yüzeye açık token'lar biniyor ve başlık
+   *  koyu-üstüne-koyu olup KAYBOLUYORDU. Ölçüldü — bkz. Faz 0 önizlemesi.
+   * (3) her iki sınıfın da tanımlı olması şart: host "light" derken sistem
+   *  koyuysa (2)'yi EZMEK gerekir; yalnız `.dark` tanımlasaydık ezemezdik. */
+  :root {
+    --ink: var(--color-text-primary, #14181d);
+    --sub: var(--color-text-secondary, #626b78);
+    --line: var(--color-border-default, #e2e6eb);
+    --hover: color-mix(in srgb, var(--ink) 4%, transparent);
+
+    --tick-w: 3.25rem;
+    --gap: 0.875rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: var(--color-text-primary, #e8ecf1);
+      --sub: var(--color-text-secondary, #98a2b0);
+      --line: var(--color-border-default, #2b323b);
+      --hover: color-mix(in srgb, var(--ink) 7%, transparent);
+    }
+  }
+  :root.dark {
+    --ink: var(--color-text-primary, #e8ecf1);
+    --sub: var(--color-text-secondary, #98a2b0);
+    --line: var(--color-border-default, #2b323b);
+    --hover: color-mix(in srgb, var(--ink) 7%, transparent);
+  }
+  :root.light {
+    --ink: var(--color-text-primary, #14181d);
+    --sub: var(--color-text-secondary, #626b78);
+    --line: var(--color-border-default, #e2e6eb);
+    --hover: color-mix(in srgb, var(--ink) 4%, transparent);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    /* Saydam: widget host'un yüzeyinde bir MİSAFİR, kendi zeminini dayatmaz. */
+    background: transparent;
+    color: var(--ink);
+    font: 400 0.875rem/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    /* Tıbbi kayıtta rakamlar hizalanmalı — sekmeli rakam pazarlık konusu değil. */
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------------------------------- başlık ---------------------------------- */
+  .head { display: flex; align-items: baseline; gap: 0.625rem; flex-wrap: wrap; }
+  h1 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 650;
+    letter-spacing: -0.012em;
+  }
+  .tally { color: var(--sub); font-size: 0.75rem; }
+  .clipped {
+    color: var(--sub);
+    font-size: 0.75rem;
+    border-bottom: 1px dashed var(--line);
+    cursor: help;
+  }
+
+  .controls { display: flex; gap: 0.375rem; flex-wrap: wrap; margin: 0.75rem 0 0.25rem; }
+
+  input[type="search"] {
+    flex: 1 1 8rem;
+    min-width: 0;
+    padding: 0.3125rem 0.5rem;
+    font: inherit;
+    font-size: 0.8125rem;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: var(--border-radius-sm, 0.375rem);
+  }
+  input[type="search"]::placeholder { color: var(--sub); }
+
+  .facet {
+    padding: 0.3125rem 0.5625rem;
+    font: inherit;
+    font-size: 0.75rem;
+    color: var(--sub);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: var(--border-radius-sm, 0.375rem);
+    cursor: pointer;
+  }
+  .facet:hover { color: var(--ink); }
+  .facet[aria-pressed="true"] {
+    color: var(--ink);
+    font-weight: 600;
+    /* Seçili durum RENKLE değil, mürekkep ağırlığı + kenarlıkla işaretlenir. */
+    border-color: currentColor;
+  }
+
+  :is(input, button):focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 1px;
+  }
+
+  /* ------------------------------ zaman omurgası ------------------------------
+   * İMZA ÖĞESİ. Her kayıt tarihlidir — kayıt özünde bir KRONOLOJİDİR, bir küme
+   * değil. Omurga, bir grafiğin ekseni gibi okunur: tarihler onun üzerinde tik.
+   * Sahte `01/02/03` numaralandırması DEĞİL — sıra gerçek bilgi taşıyor.
+   * -------------------------------------------------------------------------- */
+  .spine { list-style: none; margin: 0.75rem 0 0; padding: 0; position: relative; }
+  .spine::before {
+    content: "";
+    position: absolute;
+    top: 0.5rem; bottom: 0.5rem;
+    left: calc(var(--tick-w) + 0.5px);
+    width: 1px;
+    background: var(--line);
+  }
+
+  .year {
+    position: relative;
+    margin: 0.875rem 0 0.375rem;
+    padding-left: calc(var(--tick-w) + var(--gap));
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    color: var(--sub);
+    /* Yılın kendi arka planı var: omurga çizgisini KESER, üstünde yüzmez. */
+    background: transparent;
+  }
+  .year::before {
+    content: "";
+    position: absolute;
+    left: calc(var(--tick-w) - 0.1875rem);
+    top: 50%;
+    width: 0.4375rem; height: 0.4375rem;
+    margin-top: -0.21875rem;
+    border-radius: 50%;
+    background: var(--line);
+  }
+  .spine > .year:first-child { margin-top: 0; }
+
+  .entry {
+    position: relative;
+    display: flex;
+    gap: var(--gap);
+    padding: 0.4375rem 0.375rem 0.4375rem 0;
+    border-radius: var(--border-radius-sm, 0.375rem);
+  }
+  .entry:hover { background: var(--hover); }
+
+  .tick {
+    flex: 0 0 var(--tick-w);
+    text-align: right;
+    padding-right: 0.5rem;
+    line-height: 1.25;
+  }
+  .day { display: block; font-size: 0.8125rem; font-weight: 600; }
+  /* `text-transform: uppercase` YOK — dizeler JS'te Türkçe locale ile zaten
+     büyütülmüş geliyor. CSS büyütmesi `lang`'a bağlıdır ve lang yanlış/eksikse
+     SESSİZCE `NIS`/`DERI TESTI` üretir; doğrusu `NİS`/`DERİ TESTİ`. Bu, D6'nın
+     uyardığı ı/i tuzağının CSS'teki hâli — ölçüldü, bkz. Faz 0 önizlemesi. */
+  .mon {
+    display: block;
+    font-size: 0.625rem;
+    letter-spacing: 0.07em;
+    color: var(--sub);
+  }
+  /* Ayrıştırılamayan tarih: ham metin gösterilir, kayıt DÜŞÜRÜLMEZ.
+     Sessizce yanlış tarih uydurmaktansa ham dize göstermek doğrudur. */
+  .raw { display: block; font-size: 0.6875rem; color: var(--sub); word-break: break-word; }
+
+  .body { flex: 1 1 auto; min-width: 0; padding-left: 0.5rem; }
+  .lead { display: flex; align-items: baseline; gap: 0.4375rem; flex-wrap: wrap; }
+
+  .chip {
+    flex: none;
+    padding: 0.0625rem 0.3125rem;
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: var(--sub);
+    border: 1px solid var(--line);
+    border-radius: 0.1875rem;
+  }
+  .title { font-weight: 600; overflow-wrap: anywhere; }
+  .meta { color: var(--sub); font-size: 0.8125rem; overflow-wrap: anywhere; }
+  .note { margin-top: 0.0625rem; color: var(--sub); font-size: 0.8125rem; overflow-wrap: anywhere; }
+
+  .more {
+    margin-top: 0.625rem;
+    margin-left: calc(var(--tick-w) + var(--gap));
+    padding: 0.3125rem 0.625rem;
+    font: inherit;
+    font-size: 0.75rem;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: var(--border-radius-sm, 0.375rem);
+    cursor: pointer;
+  }
+  .more:hover { background: var(--hover); }
+
+  /* ------------------------------- boş / hata ------------------------------- */
+  .state {
+    margin: 1rem 0 0.5rem;
+    color: var(--sub);
+    font-size: 0.8125rem;
+    max-width: 44ch;
+  }
+  .state b { color: var(--ink); font-weight: 600; display: block; margin-bottom: 0.125rem; }
+
+  /* --------------------------------- devinim ---------------------------------
+   * Tek orkestre edilmiş an: kayıtlar omurga boyunca sırayla belirir. Başka
+   * hiçbir yerde animasyon yok. */
+  @keyframes rise { from { opacity: 0; transform: translateY(3px); } }
+  .anim .entry, .anim .year { animation: rise 0.24s ease-out backwards; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .anim .entry, .anim .year { animation: none; }
+  }
+</style>
+
+<main id="root" aria-live="polite"></main>
+
+<script type="module">
+/*__EXT_APPS_BUNDLE__*/
+const { App, applyHostStyleVariables } = globalThis.ExtApps;
+
+// Zaten BÜYÜK ve Türkçe doğru: `NİS`/`EKİ` — `Nis`.toUpperCase() `NIS` verirdi.
+// CSS'e de JS'in varsayılan locale'ine de bırakılmaz; burada sabittir.
+const AYLAR = ["OCA","ŞUB","MAR","NİS","MAY","HAZ","TEM","AĞU","EYL","EKİ","KAS","ARA"];
+const ILK_GOSTERIM = 8;
+
+const root = document.getElementById("root");
+
+/** Türkçe metin karşılaştırması — kıyasın İKİ tarafına da uygulanır (CLAUDE.md). */
+const trLower = (s) => String(s ?? "").toLocaleLowerCase("tr");
+
+/** Türkçe büyütme — `"İlaç"` → `"İLAÇ"`, `"Deri testi"` → `"DERİ TESTİ"`.
+ *  Locale AÇIKÇA verilir: varsayılan locale `i` → `I` yapardı. */
+const trUpper = (s) => String(s ?? "").toLocaleUpperCase("tr");
+
+/** `12.03.2024` / `12.03.2024 14:30` → parçalar. Çözemezse `null` — UYDURMAZ. */
+function parcalaTarih(raw) {
+  const m = /^\s*(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/.exec(String(raw ?? ""));
+  if (!m) return null;
+  const gun = +m[1], ay = +m[2], yil = +m[3];
+  if (ay < 1 || ay > 12 || gun < 1 || gun > 31) return null;
+  return { gun: String(gun).padStart(2, "0"), ay: AYLAR[ay - 1], yil: String(yil) };
+}
+
+const el = (tag, cls, text) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  // textContent: veri devlet portalından geliyor ve PHI içeriyor.
+  // innerHTML BU DOSYADA HİÇ KULLANILMAZ — enjeksiyon yüzeyi sıfır kalsın.
+  if (text != null && text !== "") n.textContent = text;
+  return n;
+};
+
+function durum(baslik, aciklama) {
+  const d = el("div", "state");
+  if (baslik) d.append(el("b", null, baslik));
+  d.append(document.createTextNode(aciklama));
+  return d;
+}
+
+/* ------------------------------ görünüm durumu ------------------------------ */
+let veri = null;      // {title, columns, rows, count, total, truncated, empty_text}
+let arama = "";
+let facet = null;     // seçili chip slug'ı
+let hepsiAcik = false;
+
+const kolon = (rol) => (veri.columns || []).filter((c) => c.role === rol);
+const ilkKolon = (rol) => kolon(rol)[0] ?? null;
+
+function suzulmus() {
+  const q = trLower(arama).trim();
+  const chip = ilkKolon("chip");
+  return (veri.rows || []).filter((r) => {
+    if (facet && chip && r[chip.key] !== facet) return false;
+    if (!q) return true;
+    return (veri.columns || []).some((c) => {
+      const ham = r[c.key];
+      if (ham == null || ham === "") return false;
+      const gosterilen = c.values?.[ham] ?? ham;
+      return trLower(gosterilen).includes(q);
+    });
+  });
+}
+
+function satir(r, tikGoster) {
+  const li = el("li", "entry");
+
+  const dk = ilkKolon("date");
+  const tick = el("div", "tick");
+  // Tik yalnız tarih DEĞİŞİNCE çizilir. Aynı gündeki kayıtlar tek tikin altında
+  // toplanır: tarihi her satırda tekrarlamak eksen metaforunu bozar ve gürültü
+  // yaratır — tarihin tekrarı bilgi taşımıyor, DEĞİŞİMİ taşıyor.
+  if (tikGoster) {
+    const t = dk ? parcalaTarih(r[dk.key]) : null;
+    if (t) {
+      tick.append(el("span", "day", t.gun), el("span", "mon", t.ay));
+    } else if (dk && r[dk.key]) {
+      tick.append(el("span", "raw", r[dk.key]));
+    }
+  }
+  li.append(tick);
+
+  const body = el("div", "body");
+  const lead = el("div", "lead");
+
+  for (const c of kolon("chip")) {
+    const v = r[c.key];
+    if (v) lead.append(el("span", "chip", trUpper(c.values?.[v] ?? v)));
+  }
+  for (const c of [...kolon("title"), ...kolon("meta")]) {
+    const v = r[c.key];
+    if (v) lead.append(el("span", c.role === "title" ? "title" : "meta", v));
+  }
+  // Başlık da meta da boşsa satır sessizce boş görünmesin: chip zaten var,
+  // ama hiçbiri yoksa kolon etiketiyle birlikte ham değeri göstermek yerine
+  // satırı olduğu gibi bırakırız — boş hücre bir kayıp değil, portalın gerçeği.
+  if (lead.childNodes.length) body.append(lead);
+
+  for (const c of kolon("note")) {
+    const v = r[c.key];
+    if (v) body.append(el("div", "note", v));
+  }
+
+  li.append(body);
+  return li;
+}
+
+function ciz() {
+  root.replaceChildren();
+  if (!veri) return;
+
+  const head = el("div", "head");
+  head.append(el("h1", null, veri.title || ""));
+
+  const rows = suzulmus();
+  const toplam = veri.rows?.length ?? 0;
+  head.append(el("span", "tally", rows.length === toplam
+    ? `${toplam} kayıt`
+    : `${rows.length} / ${toplam} kayıt`));
+
+  // `truncated` bir uyarıdır, süs değil: liste sunucuda kırpıldıysa kullanıcı
+  // eksik listeyi TAM sanmamalı.
+  if (veri.truncated) {
+    const c = el("span", "clipped", `${veri.total} kayıttan ${veri.count}'i`);
+    c.title = "Liste kırpıldı. Tümü için sohbette limit belirtin.";
+    head.append(c);
+  }
+  root.append(head);
+
+  const controls = el("div", "controls");
+  const ara = el("input");
+  ara.type = "search";
+  ara.placeholder = "Ara";
+  ara.value = arama;
+  ara.setAttribute("aria-label", "Kayıtlarda ara");
+  ara.addEventListener("input", (e) => { arama = e.target.value; hepsiAcik = false; ciz(); ara.focus(); });
+  controls.append(ara);
+
+  const chip = ilkKolon("chip");
+  if (chip) {
+    const mevcut = [...new Set((veri.rows || []).map((r) => r[chip.key]).filter(Boolean))];
+    // Tek tür varsa facet bir seçim sunmaz — gösterme (gereksiz aksesuar).
+    if (mevcut.length > 1) {
+      for (const slug of mevcut) {
+        const b = el("button", "facet", chip.values?.[slug] ?? slug);
+        b.type = "button";
+        b.setAttribute("aria-pressed", String(facet === slug));
+        b.addEventListener("click", () => { facet = facet === slug ? null : slug; hepsiAcik = false; ciz(); });
+        controls.append(b);
+      }
+    }
+  }
+  root.append(controls);
+
+  if (!toplam) { root.append(durum(null, veri.empty_text || "Kayıt bulunamadı.")); return; }
+  if (!rows.length) { root.append(durum(null, "Aramayla eşleşen kayıt yok.")); return; }
+
+  const gosterilecek = hepsiAcik ? rows : rows.slice(0, ILK_GOSTERIM);
+  const ol = el("ol", "spine anim");
+  const dk = ilkKolon("date");
+  let sonYil = null;
+  let sonTarih = null;
+  let i = 0;
+
+  for (const r of gosterilecek) {
+    const ham = dk ? r[dk.key] : null;
+    const t = dk ? parcalaTarih(ham) : null;
+    if (t && t.yil !== sonYil) {
+      sonYil = t.yil;
+      sonTarih = null; // yıl kuralından sonra tik hep yeniden çizilir
+      const y = el("li", "year", t.yil);
+      y.style.animationDelay = `${Math.min(i, 12) * 18}ms`;
+      ol.append(y);
+    }
+    // Ham dizeyle karşılaştırılır, ayrıştırılmışla değil: ayrıştırılamayan iki
+    // farklı tarih aynı `null`a düşer ve yanlışlıkla tek gruba girerdi.
+    const li = satir(r, ham !== sonTarih);
+    sonTarih = ham;
+    li.style.animationDelay = `${Math.min(i, 12) * 18}ms`;
+    ol.append(li);
+    i++;
+  }
+  root.append(ol);
+
+  if (!hepsiAcik && rows.length > ILK_GOSTERIM) {
+    const b = el("button", "more", `Tümünü göster (${rows.length})`);
+    b.type = "button";
+    b.addEventListener("click", () => { hepsiAcik = true; ciz(); });
+    root.append(b);
+  }
+}
+
+/* -------------------------------- host teması ------------------------------- */
+function temayiUygula(ctx) {
+  const kok = document.documentElement;
+  // Host tema BİLDİRDİYSE iki sınıftan biri konur ve @media yedeğini EZER.
+  // Bildirmediyse ikisi de kalkar → @media prefers-color-scheme devreye girer.
+  kok.classList.toggle("dark", ctx?.theme === "dark");
+  kok.classList.toggle("light", ctx?.theme === "light");
+  if (ctx?.styles?.variables) applyHostStyleVariables(ctx.styles.variables);
+}
+
+/* ---------------------------------- yaşam ---------------------------------- */
+(async () => {
+  // İçerik Türkçe: ekran okuyucu doğru sesletsin, tarayıcı doğru heceleme yapsın.
+  // (Görsel büyütme buna GÜVENMEZ — o iş `trUpper`'da, açık locale ile.)
+  document.documentElement.lang = "tr";
+
+  const app = new App({ name: "enabiz-table", version: "1.0.0" }, {}, { autoResize: true });
+
+  app.onhostcontextchanged = temayiUygula;
+
+  // connect()'TEN ÖNCE kurulmalı — sonuç bağlantının hemen ardından gelebilir.
+  app.ontoolresult = async ({ content }) => {
+    let ozet;
+    try {
+      ozet = JSON.parse(content?.[0]?.text ?? "{}");
+    } catch {
+      root.replaceChildren(durum("Panel açılamadı", "Sunucu yanıtı okunamadı."));
+      return;
+    }
+    if (ozet.error) {
+      root.replaceChildren(durum("Kayıtlar getirilemedi", ozet.message || ozet.error));
+      return;
+    }
+
+    // PHI giriş tool'unun yanıtında YOK — burada, modeli baypas ederek çekilir.
+    try {
+      const res = await app.callServerTool({
+        name: "enabiz_ui_data",
+        arguments: { domain: ozet.domain, params: ozet.params ?? {} },
+      });
+      const payload = res?.structuredContent ?? JSON.parse(res?.content?.[0]?.text ?? "{}");
+      if (payload.error) {
+        const ipucu = payload.error === "auth_required"
+          ? "Sohbette giriş yapın, sonra tekrar sorun."
+          : (payload.message || payload.error);
+        root.replaceChildren(durum("Kayıtlar getirilemedi", ipucu));
+        return;
+      }
+      veri = payload;
+      ciz();
+    } catch (e) {
+      root.replaceChildren(durum("Kayıtlar getirilemedi", String(e?.message ?? e)));
+    }
+  };
+
+  await app.connect();
+  temayiUygula(app.getHostContext());
+})();
+</script>

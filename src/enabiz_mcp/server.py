@@ -36,6 +36,8 @@ from .tools import (
     summary,
     vaccinations,
 )
+from .ui import resources as ui_resources
+from .ui import tools as ui_tools
 
 mcp: FastMCP = FastMCP(
     name="enabiz",
@@ -129,6 +131,14 @@ mhrs_booking.register(mcp)
 # İdari + belge indirme
 administrative.register(mcp)
 download.register(mcp)
+
+# MCP Apps (ext-apps) katmanı — `io.modelcontextprotocol/ui`.
+# Panel render EDEBİLEN istemcilerde liste tool'ları PHI yerine sayı döner ve
+# kayıtları `enabiz_ui_data` panele doğrudan verir; edemeyende hiçbir şey değişmez
+# (`ui.app_capable` `False` → bugünkü metin yolu). Uzantıyı FastMCP kendi ilan
+# eder — burada yapılacak bir şey yok.
+ui_resources.register(mcp)  # ui:// widget HTML'leri
+ui_tools.register(mcp)  # enabiz_ui_data — visibility:["app"], model GÖRMEZ
 
 
 def main() -> None:
