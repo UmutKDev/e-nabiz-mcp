@@ -46,6 +46,17 @@ _PATTERNS: dict[str, re.Pattern] = {
     "AspNetCookie": re.compile(r"CfDJ8[A-Za-z0-9_%+/-]{16,}"),
     # WAF çerezi (SAGLIK<hex>=<uzun hex>).
     "WafCookie": re.compile(r"SAGLIK[0-9a-f]{6,}=[0-9a-f]{20,}", re.IGNORECASE),
+    # MHRS hasta randevu numarası (hrn): 7 karakter, rakamla başlar, EN AZ bir harf
+    # içerir (`3KNBUGS`). Kullanıcıya özeldir — o randevuyu iptal etmenin anahtarı.
+    #
+    # Bu desen gerçek bir sızıntının regresyonu: canlı bir hrn, "somut yol örneği"
+    # diye `mhrs/discovery.py` yorumuna ve bir test docstring'ine yazılmıştı ve
+    # PyPI'a gidiyordu. Yayım GERİ ALINAMAZ.
+    #
+    # "En az bir harf" şartı YANLIŞ POZİTİFİ eler: `8699111` (ilaç barkodu) ve
+    # `7082731` (muayene yeri id'si) 7 hanelidir ama saf sayıdır; ikisi de kamuya
+    # açık katalog verisidir, kullanıcıya özel değil.
+    "MhrsHrn": re.compile(r"\b[0-9](?=[A-Z0-9]*[A-Z])[A-Z0-9]{6}\b"),
 }
 
 # Testlerin uydurma UUID'leri: her tire-grubu TEK bir karakterin tekrarı
@@ -72,8 +83,17 @@ def _scanned_files() -> list[Path]:
     return out
 
 
+#: Testlerin uydurma hrn'leri. Allowlist DAR ve YAPISALdır: "SENTETİK" yorumuna
+#: güvenmek tam da kaçırdığımız hataydı.
+_SYNTHETIC_HRN = frozenset({"0SENTET"})
+
+
 def _is_allowed(kind: str, value: str) -> bool:
-    return kind == "UUID" and bool(_LOW_ENTROPY_UUID.fullmatch(value))
+    if kind == "UUID":
+        return bool(_LOW_ENTROPY_UUID.fullmatch(value))
+    if kind == "MhrsHrn":
+        return value in _SYNTHETIC_HRN
+    return False
 
 
 def test_scan_actually_covers_the_tree():

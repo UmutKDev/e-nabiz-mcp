@@ -1,6 +1,6 @@
 [project]
 name = "enabiz-mcp"
-version = "0.2.0"
+version = "0.3.0"
 description = "E-Nabız (T.C. Sağlık Bakanlığı kişisel sağlık sistemi) için yerel MCP sunucusu"
 readme = "README.md"
 license = "MIT"

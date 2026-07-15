@@ -117,12 +117,12 @@ def test_verified_read_matches_both_template_and_concrete_path():
     """Sınıflandırıcı İKİ bağlamda koşar — ikisinde de tutmalı.
 
     Keşif route ŞABLONU verir (`…/{p1}`), çalışma-zamanı kapısı SOMUT yol
-    (`…/3KNBUGS`). İlk sürüm düz string olarak şablonu tutuyordu: bu testin şablon
+    (`…/<hrn>`). İlk sürüm düz string olarak şablonu tutuyordu: bu testin şablon
     hâli GEÇİYORDU ama canlı çağrı `WriteNotAllowed` ile patladı. Tek bağlamı
     sınayan bir test, iki bağlamlı bir fonksiyonu kanıtlamaz.
     """
     tpl = "kurum/randevu/ayni-hekimden-randevu-al/{p1}"
-    somut = "kurum/randevu/ayni-hekimden-randevu-al/3KNBUGS"
+    somut = "kurum/randevu/ayni-hekimden-randevu-al/0SENTET"  # SENTETİK hrn
     assert m.classify_mhrs_call("GET", tpl) == "read"
     assert m.classify_mhrs_call("GET", somut) == "read"
 

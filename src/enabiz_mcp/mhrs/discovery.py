@@ -109,7 +109,7 @@ _READ_POSTS = frozenset(
 #
 # Desen REGEX, düz string değil — çünkü bu sınıflandırıcı İKİ bağlamda kullanılır:
 #   keşif       → route ŞABLONU  ("…/ayni-hekimden-randevu-al/{p1}")
-#   çalışma zam. → SOMUT yol     ("…/ayni-hekimden-randevu-al/3KNBUGS")
+#   çalışma zam. → SOMUT yol     ("…/ayni-hekimden-randevu-al/<hrn>")
 # Düz string eşleşmesi biriyle tutar, ötekiyle tutmaz. İlk sürüm şablonu yazıyordu:
 # testler (şablon) geçti, canlı çağrı (somut) `WriteNotAllowed` ile patladı.
 # Desen çapalıdır ve SON segmentte tam bir parça ister — alt yollara sızmaz.
