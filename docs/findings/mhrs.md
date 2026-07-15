@@ -553,3 +553,30 @@ Ad-bazlı sınıflama GET tuzağına karşı doğru bir savunma, ama **ada inanm
 yerine geçmez**. `_VERIFIED_READS` bu yüzden var ve girişi tek ölçüte bağlı: canlıda
 çağrılmış, öncesi/sonrası karşılaştırılmış, değişmediği görülmüş. "Bundle öyle
 kullanıyor gibi" yetmez.
+
+
+### Tekrar randevu → talep zinciri (canlı doğrulandı, uçtan uca)
+
+Kullanıcının senaryosu: geçmiş bir randevudan aynı hekime tekrar randevu; uygun yer
+yoksa o hekim için talep. Ölçülen akış:
+
+```
+list_history            → hrn (DTO'da ayniHekimdenRandevuAl: true)
+rebook_criteria(hrn)    → {il, kurum, klinik, hekim, aksiyon, muayeneYeri}   YAZMAZ
+search_slots(...)       → 0 gün  (hekimin boşluğu yok — webdeki durumun aynısı)
+create_request(doctor_id=...)  → talep, hekim adıyla oluşur
+```
+
+**`doctor_id` FARK YARATIR** — canlıda ölçüldü:
+
+| `doctor_id` | Oluşan talep |
+|---|---|
+| geçilmez | `hekim` alanı YOK — kurum+klinik geneline talep; herhangi bir hekimin boşluğu bildirir |
+| geçilir | `hekim: <ad soyad>` — yalnız o hekimin boşluğu bildirir |
+
+İkisi de geçerli ama SESSİZCE farklı şeyler; hangisinin istendiği kullanıcıya
+sorulmalı.
+
+**Zincir otomatik DEĞİLDİR.** "Uygun yoksa talep aç" diye tek bir uç yok; boş sonucu
+görüp talep önermek çağıranın işi. Web de aynısını yapar — kullanıcıya modal çıkar
+(`GNL2030`), "Talep" derse `randevu-talep` POST'lanır.

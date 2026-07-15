@@ -135,6 +135,12 @@ def register(mcp: FastMCP) -> None:
         - `clinic_id` / `institution_id`: aramada kullandığınız id'ler.
         - `doctor_id` / `exam_place_id`: verilmezse "farketmez" (`-1`).
         - `confirm`: kullanıcı açıkça onaylamadan `True` GEÇMEYİN.
+
+        **Belirli bir hekim için talep** (geçmiş randevudan tekrar akışı): `doctor_id`
+        geçin — `enabiz_mhrs_rebook_criteria`'nın döndürdüğü id. Canlıda doğrulandı:
+        talep hekim adıyla oluşuyor. `doctor_id` geçilmezse talep KURUM+KLİNİK
+        geneline açılır ve herhangi bir hekimin boşluğu bildirim tetikler — sessizce
+        farklı bir şey, o yüzden hangisinin istendiğini kullanıcıya sorun.
         """
         if not confirm:
             return {
