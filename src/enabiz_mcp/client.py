@@ -49,34 +49,58 @@ class _Throttle:
             self._last = time.monotonic()
 
 
-_throttles: dict[float, _Throttle] = {}
+_throttles: dict[tuple[str, float], _Throttle] = {}
 _throttles_lock = threading.Lock()
 
 
-def _throttle_for(min_interval: float) -> _Throttle:
-    """`min_interval` için süreç-genelinde paylaşılan throttle'ı döndürür."""
+def _host_of(base_url: str) -> str:
+    """`base_url`'ün host'u — throttle anahtarının bir parçası."""
+    return httpx.URL(base_url).host
+
+
+def _throttle_for(host: str, min_interval: float) -> _Throttle:
+    """`(host, min_interval)` için süreç-genelinde paylaşılan throttle'ı döndürür.
+
+    Host anahtarın parçası: e-Nabız ve MHRS **ayrı sunucular, ayrı hız sınırları**.
+    Yalnız interval'e göre keylenseydi (eski hâl) iki host tek throttle'ı paylaşır ve
+    her biri diğerinin beklemesini öderdi — üstelik MHRS'nin daha yavaş olması gereken
+    aralığı (RNDS1000 anti-bot kilidi) e-Nabız'ı da gereksizce yavaşlatırdı.
+    """
+    key = (host, min_interval)
     with _throttles_lock:
-        throttle = _throttles.get(min_interval)
+        throttle = _throttles.get(key)
         if throttle is None:
             throttle = _Throttle(min_interval)
-            _throttles[min_interval] = throttle
+            _throttles[key] = throttle
         return throttle
 
 
-def build_client(cfg: Config, cookies: httpx.Cookies | None = None) -> httpx.Client:
-    """Portal için yapılandırılmış senkron `httpx.Client` üretir (hız sınırlı)."""
+def build_client(
+    cfg: Config,
+    cookies: httpx.Cookies | None = None,
+    *,
+    extra_headers: Mapping[str, str] | None = None,
+) -> httpx.Client:
+    """Portal için yapılandırılmış senkron `httpx.Client` üretir (hız sınırlı).
+
+    `extra_headers`: varsayılanların üzerine eklenir/yazar. MHRS'nin
+    `Authorization: Bearer <jwt>` başlığı için gerekli — e-Nabız cookie ile çalışır,
+    MHRS token ile.
+    """
     headers = {
         "User-Agent": cfg.user_agent,
         "Accept-Language": "tr,en;q=0.9",
         "Accept": "*/*",
     }
+    if extra_headers:
+        headers.update(extra_headers)
     return httpx.Client(
         base_url=cfg.base_url,
         headers=headers,
         follow_redirects=True,
         timeout=30.0,
         cookies=cookies,
-        event_hooks={"request": [_throttle_for(cfg.min_interval)]},
+        event_hooks={"request": [_throttle_for(_host_of(cfg.base_url), cfg.min_interval)]},
     )
 
 

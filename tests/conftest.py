@@ -20,6 +20,14 @@ def fixture_html(name: str) -> str:
     return (FIXTURES / name).read_text(encoding="utf-8")
 
 
+def fixture_text(name: str) -> str:
+    """Sentetik fixture'ı uzantısını TAHMİN ETMEDEN okur (PHI yok).
+
+    `fixture_html` eksik uzantıyı `.html` sanar; MHRS fixture'ları `.js`/`.json`.
+    """
+    return (FIXTURES / name).read_text(encoding="utf-8")
+
+
 def load_script(name: str) -> ModuleType:
     """`scripts/` altındaki bir betiği dosya yolundan yükler (paket değil)."""
     path = Path(__file__).resolve().parent.parent / "scripts" / f"{name}.py"

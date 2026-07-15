@@ -9,10 +9,19 @@ Bu dosya *her zaman geçerli* olanı tutar. Adım-adım iş akışları skill'le
 
 ## Değişmez invaryantlar (bunları asla ihlal etme)
 
-1. **Salt-okunur.** Hiçbir tool yazma/mutasyon ucu (`/Sil`, `/Kaydet`, `/Iptal`, randevu
-   al/iptal vb.) çağırmaz. Bu test edilen bir invaryant: bir yazma ucu isabet ederse
-   suite kasten patlar — `tests/test_discover_scan.py:44-45`. Durum değiştiren TEK iki
-   tool `enabiz_login_start` (SMS gönderir) ve `enabiz_login_verify` (oturum yazar).
+1. **Salt-okunur — sisteme göre.** İki sistem var, kural ayrışır (gerekçe: `decisions.md` D7).
+   - **E-Nabız (KSS) sağlık verisi: SALT-OKUNUR.** Hiçbir tool `/Sil`, `/Kaydet`,
+     `/Iptal` gibi bir yazma ucu çağırmaz. Test edilen invaryant: e-Nabız keşif
+     tarayıcısı bir yazma ucuna dokunursa suite kasten patlar —
+     `tests/test_discover_scan.py:44-45`. `discovery.py:56-59` denylist'i
+     (`RandevuAl`/`ManuelRandevu` dahil) **aynen durur, gevşetilmez**.
+   - **MHRS (randevu): YAZMA AÇIK.** Randevu alma/iptal `prd.mhrs.gov.tr` API'sinde,
+     `readOnlyHint: False` ve **iki-adımlı onay** ile yapılır: `book_prepare` slotu
+     doğrulayıp `confirm_token` döner (yazmaz), `book_confirm` yazar. Tek adımlı bir
+     `book(slot_id)` YAZMA — LLM'in uydurduğu slot id kullanıcıya 15 günlük gerçek
+     branş yasağı yazdırır. `api_client(..., allow_write=True)` açık niyet beyanıdır.
+   - Durum değiştiren tool'lar: `enabiz_login_start` (SMS), `enabiz_login_verify`
+     (oturum) + MHRS randevu yazma tool'ları. Başka hiçbiri.
 2. **Sessiz yanlış-eşleme, boş sonuçtan KÖTÜDÜR.** Beklenen tablo id'si yoksa `[]` dön.
    Asla `select_one("#id") or soup.find("table")` fallback'i ekleme — bu tam olarak
    `a074eee`'de 15 parser'dan silinen sessiz-bozulma hatası (eksik id'de sayfanın ilk
@@ -74,7 +83,8 @@ yazma; değişiklikte oradaki sayıyı `surum-guncelle` skill'iyle güncelle.
 - `has_auth_cookie()==True` oturum geçerli DEMEK DEĞİL; canlı kontrol `session_alive()`.
 - Tüm HTTP `build_client` üzerinden — throttle süreç-geneli, yeni client sıfırlamaz.
 - `readOnlyHint` yalnız UZAK portal mutasyonunu yansıtır; yerel dosya/ağ değil. PDF
-  indiren ve `session_status` yine `True`; yalnız 2 login tool'u `False`.
+  indiren ve `session_status` yine `True`. `False` olanlar: 2 login tool'u + MHRS
+  randevu yazma tool'ları. Yeni bir e-Nabız veri tool'u ASLA `False` almaz.
 
 ## Dil ve commit
 

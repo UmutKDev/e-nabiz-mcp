@@ -123,21 +123,50 @@ def get_antiforgery(client: httpx.Client) -> str:
 # --------------------------------------------------------------------------- #
 # Oturum kalıcılığı
 # --------------------------------------------------------------------------- #
-def save_session(cfg: Config, cookies: httpx.Cookies) -> None:
-    """Kimlikli cookie'leri sıkı izinli yerel dosyaya yazar (chmod 600)."""
+def read_session_file(cfg: Config) -> dict:
+    """Oturum dosyasının HAM sözlüğünü döndürür (yoksa/bozuksa `{}`).
+
+    Dosya artık birden çok yazıcı tarafından paylaşılıyor: e-Nabız cookie'leri
+    (`"cookies"`) ve MHRS JWT'si (`"mhrs"`). Bozuk JSON'da patlamak yerine `{}`
+    dönmek doğru: kayıp oturum yeniden girişle çözülür, ama exception tüm tool'ları
+    kilitler.
+    """
+    path = cfg.session_path
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def write_session_file(cfg: Config, data: dict) -> None:
+    """Oturum sözlüğünü sıkı izinli yazar (chmod 600). Tüm yazıcılar bunu kullanır."""
     path = cfg.session_path
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"cookies": _cookies_to_list(cookies)}), encoding="utf-8")
+    path.write_text(json.dumps(data), encoding="utf-8")
     path.chmod(0o600)
+
+
+def save_session(cfg: Config, cookies: httpx.Cookies) -> None:
+    """Kimlikli cookie'leri sıkı izinli yerel dosyaya yazar (chmod 600).
+
+    **Read-modify-write**: dosyayı ezmez. Eskiden `{"cookies": ...}` ile tüm dosyayı
+    overwrite ediyordu; MHRS JWT'si kardeş anahtar olarak yanına yerleşince bu iki
+    yazıcının birbirini silmesi demek olurdu (e-Nabız'a her girişte MHRS token'ı
+    uçardı).
+    """
+    data = read_session_file(cfg)
+    data["cookies"] = _cookies_to_list(cookies)
+    write_session_file(cfg, data)
 
 
 def load_session(cfg: Config) -> httpx.Cookies | None:
     """Kaydedilmiş oturumu yükler; yoksa None."""
-    path = cfg.session_path
-    if not path.exists():
+    if not cfg.session_path.exists():
         return None
-    data = json.loads(path.read_text(encoding="utf-8"))
-    return _cookies_from_list(data.get("cookies", []))
+    return _cookies_from_list(read_session_file(cfg).get("cookies", []))
 
 
 def has_auth_cookie(cookies: httpx.Cookies) -> bool:

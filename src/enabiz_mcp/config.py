@@ -59,6 +59,14 @@ class Config:
     # Portalın WAF'ını (SAGLIK* cookie) tetiklememek için istekler arası minimum
     # bekleme (saniye). ENABIZ_MIN_INTERVAL ile ayarlanır.
     min_interval: float = 0.5
+    # MHRS için AYRI ve daha yavaş aralık (ENABIZ_MHRS_MIN_INTERVAL). Throttle host'a
+    # göre keyli olduğu için bu e-Nabız'ı yavaşlatmaz.
+    #
+    # Neden daha yavaş: MHRS'de RNDS1000 anti-bot kilidi var — "hayatın olağan akışına
+    # aykırı şekilde çok fazla randevu sorgulaması" tespit edilirse kullanıcı ONLINE
+    # randevudan tamamen çıkarılıp Alo 182'ye yönlendiriliyor. Kayıp hız değil,
+    # ERİŞİM. 2.0 bir TAHMİN, ölçüm değil — gerçek eşik bilinmiyor.
+    mhrs_min_interval: float = 2.0
     # Nazik hız sınırı / gerçekçi tarayıcı taklidi için varsayılan User-Agent.
     user_agent: str = field(
         default=(
@@ -76,6 +84,7 @@ class Config:
             session_path=_default_session_path(),
             download_dir=_default_download_dir(),
             min_interval=_env_float("ENABIZ_MIN_INTERVAL", 0.5),
+            mhrs_min_interval=_env_float("ENABIZ_MHRS_MIN_INTERVAL", 2.0),
         )
 
     @property

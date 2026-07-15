@@ -59,11 +59,12 @@ def test_throttle_first_request_is_free():
     assert time.monotonic() - start < 0.05
 
 
-def _cfg(min_interval: float) -> Config:
+def _cfg(min_interval: float, base_url: str = "https://enabiz.gov.tr") -> Config:
     return Config(
         tc_kimlik_no=None,
         sifre=None,
         session_path=Path("/tmp/enabiz-test-session.json"),
+        base_url=base_url,
         min_interval=min_interval,
     )
 
@@ -80,8 +81,32 @@ def test_throttle_is_shared_across_clients():
     hook_a = build_client(cfg).event_hooks["request"][0]
     hook_b = build_client(cfg).event_hooks["request"][0]
     assert hook_a is hook_b
-    assert hook_a is _throttle_for(0.3)
+    assert hook_a is _throttle_for("enabiz.gov.tr", 0.3)
 
 
 def test_throttle_not_shared_across_different_intervals():
-    assert _throttle_for(0.3) is not _throttle_for(0.7)
+    assert _throttle_for("enabiz.gov.tr", 0.3) is not _throttle_for("enabiz.gov.tr", 0.7)
+
+
+def test_throttle_not_shared_across_hosts():
+    """E-Nabız ve MHRS AYRI sunucular → ayrı throttle.
+
+    Paylaşsalardı her host diğerinin beklemesini öderdi ve MHRS'nin RNDS1000 için
+    gereken yavaş aralığı e-Nabız'ı da gereksizce yavaşlatırdı.
+    """
+    enabiz = build_client(_cfg(0.3)).event_hooks["request"][0]
+    mhrs = build_client(_cfg(0.3, "https://prd.mhrs.gov.tr")).event_hooks["request"][0]
+    assert enabiz is not mhrs
+
+
+def test_extra_headers_merge_and_override():
+    """MHRS'nin Authorization başlığı için — varsayılanlar korunur, üzerine yazılır."""
+    c = build_client(_cfg(0.0), extra_headers={"Authorization": "Bearer x", "Accept": "app/json"})
+    assert c.headers["authorization"] == "Bearer x"
+    assert c.headers["accept"] == "app/json"  # üzerine yazdı
+    assert c.headers["accept-language"] == "tr,en;q=0.9"  # varsayılan korundu
+
+
+def test_no_authorization_header_by_default():
+    """E-Nabız cookie ile çalışır — kazara Bearer sızmasın."""
+    assert "authorization" not in {k.lower() for k in build_client(_cfg(0.0)).headers}
