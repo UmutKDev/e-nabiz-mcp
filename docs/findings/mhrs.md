@@ -455,7 +455,32 @@ Ayrıca `kurum.ilIlce` ALT nesnedir — `kurum.mhrsIlceId` YOKTUR (parser bir tu
 | `POST kurum/randevu-talep` | oluştur — `{lhatirlatmaSaatSecimi, mhrsHekimId, mhrsKlinikId, mhrsKurumId, muayeneYeriId}` |
 | `DELETE kurum/randevu-talep/{id}` | sil — `talepSilinebilir` ise |
 | `POST kurum/randevu-talep/yenile/{id}` | yenile — `yenilenebilir` ise (tool YOK) |
-| `GET yonetim/genel/lookup/selectinput/HATIRLATMA_SAAT_SECIMI` | hatırlatma saati seçenekleri (tool YOK; sabit `"1"` gönderiliyor) |
+| `GET yonetim/genel/lookup/selectinput/HATIRLATMA_SAAT_SECIMI` | **ÖLÜ KOD** — bundle çeker ama sonucu ATAR, aşağıya bak |
 
 Talep bir randevu DEĞİLDİR: slot tutmaz, 15 günlük branş yasağı riski taşımaz. Ama
 sunucuda kalıcı kayıt açar ve bildirim tetikler → yazma, `confirm=True` ister.
+
+
+### `HATIRLATMA_SAAT_SECIMI` ölü koddur — çağrının varlığı kullanıldığı anlamına gelmez
+
+Bundle bu lookup'ı GET'ler ve sonucu `V`'ye `saatList` diye geçer. `V` onu **atar** —
+virgül operatörü:
+
+```js
+V = function(e) {
+  var t = e.context,
+      n = (e.saatList, N({lhatirlatmaSaatSecimi:"1"}, e.talepBodyData));
+  //   ^^^^^^^^^^^ hesaplanır, değeri DÜŞER
+  _.a.post("kurum/randevu-talep", n)…
+```
+
+Tüm bundle'da `lhatirlatmaSaatSecimi` **tek bir yerde** ve **tek bir değerle** geçer:
+`"1"`. Kullanıcı da doğruladı: arayüzde bildirim saati seçeneği YOK.
+
+Bu bir "eksik özellik" sanıldı ve YANLIŞTI. Çıkarım şuydu: "lookup çekiliyorsa
+seçenek vardır". Yanlış — **bir çağrının varlığı, sonucunun kullanıldığını
+göstermez.** `getSelectedFavoriRandevuAra` da aynı sınıfta: export edilmiş, hiçbir
+yerden çağrılmıyor.
+
+Ders, `RandevuAl`'ınkinin ikizi: orada **ad** yalan söylüyordu (randevu almıyor,
+token basıyor), burada **çağrı** yalan söylüyor (sonucu kullanılmıyor).

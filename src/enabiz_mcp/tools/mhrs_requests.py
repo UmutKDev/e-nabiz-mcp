@@ -11,9 +11,11 @@ yazmadır ve `confirm=True` ister.
 
 Bundle'daki akış (vatandas-45-chunk.js):
     GET  yonetim/genel/mesaj/by-kodu/GNL2030   → onay metni
-    GET  yonetim/genel/lookup/selectinput/HATIRLATMA_SAAT_SECIMI  → saat seçenekleri
     POST kurum/randevu-talep  {lhatirlatmaSaatSecimi, mhrsHekimId, mhrsKlinikId,
                                mhrsKurumId, muayeneYeriId}
+
+Bundle ayrıca `HATIRLATMA_SAAT_SECIMI` lookup'ını çeker ama sonucunu ATAR (bkz.
+`HATIRLATMA_SAAT`) — arayüzde bildirim saati seçeneği yoktur.
 """
 
 from __future__ import annotations
@@ -32,12 +34,19 @@ TALEP_PATH = "kurum/randevu-talep"
 TALEP_SEARCH_PATH = "kurum/randevu-talep/search"
 TALEP_DELETE_PATH = "kurum/randevu-talep/{talep_id}"
 TALEP_RENEW_PATH = "kurum/randevu-talep/yenile/{talep_id}"
-HATIRLATMA_PATH = "yonetim/genel/lookup/selectinput/HATIRLATMA_SAAT_SECIMI"
 
-#: Bundle sabit `"1"` gönderiyor (`N({lhatirlatmaSaatSecimi:"1"}, talepBodyData)`).
-#: Seçenek listesi `HATIRLATMA_SAAT_SECIMI` lookup'ında; şimdilik tarayıcının
-#: varsayılanını birebir taklit ediyoruz.
-DEFAULT_HATIRLATMA = "1"
+#: Her zaman `"1"` — bu bir varsayılan DEĞİL, tek değer. Kullanıcı doğruladı:
+#: arayüzde bildirim saati seçeneği YOK.
+#:
+#: Bundle yanıltıcı: `HATIRLATMA_SAAT_SECIMI` lookup'ını GET'liyor ve sonucu `V`'ye
+#: `saatList` diye geçiyor. Ama V onu ATIYOR — virgül operatörü:
+#:     n = (e.saatList, N({lhatirlatmaSaatSecimi:"1"}, e.talepBodyData))
+#: `e.saatList` hesaplanır ve değeri düşer; gövdeye giren sabit `"1"`'dir. Tüm
+#: bundle'da `lhatirlatmaSaatSecimi` yalnız burada, yalnız bu değerle geçer.
+#:
+#: Yani o GET ölü koddur. "Lookup çekiliyorsa seçilebiliyordur" çıkarımı yapıldı ve
+#: YANLIŞTI — çağrının varlığı, sonucunun kullanıldığı anlamına gelmez.
+HATIRLATMA_SAAT = "1"
 
 
 def _ad(raw: Any, *keys: str) -> str | None:
@@ -131,7 +140,7 @@ def register(mcp: FastMCP) -> None:
         cfg = Config.from_env()
         session = mhrs_session(cfg)
         body = {
-            "lhatirlatmaSaatSecimi": DEFAULT_HATIRLATMA,
+            "lhatirlatmaSaatSecimi": HATIRLATMA_SAAT,
             "mhrsHekimId": _id(doctor_id),
             "mhrsKlinikId": _id(clinic_id),
             "mhrsKurumId": _id(institution_id),
