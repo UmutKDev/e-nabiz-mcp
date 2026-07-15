@@ -233,10 +233,76 @@ def test_malformed_mhrs_entry_returns_none(tmp_path, raw):
 # --------------------------------------------------------------------------- #
 # SSO zinciri
 # --------------------------------------------------------------------------- #
-_RANDEVULARIM = (
-    '<html><a href="/Randevu/RandevuAl?ID=99999999&vasiOnay=False">Kendim için</a></html>'
-)
+# CANLI sayfanın GERÇEK şekli (SENTETİK id'lerle). Bir tur bu fixture
+# `<a href="/Randevu/RandevuAl?ID=99999999&vasiOnay=False">` idi — yani kullanıcının
+# yakaladığı curl'ün, İSTEĞİN şekli. O dizi sayfada HİÇ GEÇMİYOR; kaynak `onclick`
+# handler'ı. Fixture yanlış varsayımı kodladığı için test yeşil kalırken canlı zincir
+# ilk adımda kırılıyordu — fixture'ı gerçeğe çekmek bu yüzden testin kendisi kadar
+# önemli.
+_RANDEVULARIM = """<html>
+  <table><tr><td>MHRS</td><td>
+    <a href="javascript:linkAlTekrar('11111111','False','34','111111','123','456','78');"
+       class="rtekrarlaBtn">Randevuyu Tekrarla</a>
+  </td></tr></table>
+  <div class="modalBaslikKucuk">Randevu Alınacak Kişi</div>
+  <ul class="randevuAlListe">
+    <li><a onclick="linkAl('99999999','False')"><span>Kendim</span></a></li>
+  </ul>
+  <script>
+    function linkAl(id, vasiOnay) {
+      $.ajax({ data: { ID: id, vasiOnay : vasiOnay }, url: "/Randevu/RandevuAl", type: "GET" });
+    }
+    function linkAlTekrar(id, vasiOnay, mhrsIlId) {
+      $.ajax({ url: "/Randevu/RandevuAlTekrar", type: "GET" });
+    }
+  </script>
+</html>"""
 _MINT_BODY = f"https://prd.mhrs.gov.tr/vatandas/#/?enabizToken={_TOKEN}&lang=tr-TR"
+
+
+def test_scrape_person_id_ignores_randevu_tekrarla_link():
+    """`linkAlTekrar` aynı önekle başlar ama BAŞKA bir uca gider — kazınmamalı.
+
+    Canlı sayfada 5 kez geçiyor ve `/Randevu/RandevuAlTekrar`'a gidiyor. Regex
+    `linkAl`'dan hemen sonra `(` istemezse bu satırlardaki id kişi id'si sanılırdı.
+    """
+    c = httpx.Client(
+        base_url="https://enabiz.gov.tr",
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, text=_RANDEVULARIM)),
+    )
+    assert mhrs_auth.scrape_person_id(c) == "99999999"  # 11111111 DEĞİL
+
+
+def test_scrape_person_id_refuses_when_multiple_non_vasi_people():
+    """Birden fazla vasi-olmayan kişide sessizce ilkini SEÇME — hata ver.
+
+    Belirsizlikte randevu YANLIŞ KİŞİYE yazılabilir; boş/hata dönmek daha ucuz.
+    """
+    html = (
+        "<ul class='randevuAlListe'>"
+        "<li><a onclick=\"linkAl('11111111','False')\">A</a></li>"
+        "<li><a onclick=\"linkAl('22222222','False')\">B</a></li></ul>"
+    )
+    c = httpx.Client(
+        base_url="https://enabiz.gov.tr",
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, text=html)),
+    )
+    with pytest.raises(mhrs_auth.MhrsError, match="birden fazla"):
+        mhrs_auth.scrape_person_id(c)
+
+
+def test_scrape_person_id_skips_vasi_entries():
+    """`vasiOnay=True` başkası adına randevudur — kapsam dışı, seçilmez."""
+    html = (
+        "<ul class='randevuAlListe'>"
+        "<li><a onclick=\"linkAl('77777777','True')\">Vasi olduğum kişi</a></li>"
+        "<li><a onclick=\"linkAl('99999999','False')\">Kendim</a></li></ul>"
+    )
+    c = httpx.Client(
+        base_url="https://enabiz.gov.tr",
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, text=html)),
+    )
+    assert mhrs_auth.scrape_person_id(c) == "99999999"
 
 
 def test_scrape_person_id_and_mint_token():

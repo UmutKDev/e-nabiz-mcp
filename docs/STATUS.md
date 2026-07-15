@@ -6,8 +6,7 @@ Son güncelleme: 2026-07-15
 
 Giriş (XSRF + SMS OTP) → oturum kalıcılığı → kimlikli veri çekme → HTML parse →
 yapılandırılmış MCP çıktısı. **37 tool / 20 veri alanı**, tamamı salt-okunur.
-e-Nabız alanları canlı portala karşı doğrulandı; MHRS tool'ları (Faz 2) HENÜZ
-canlı doğrulanmadı — sözleşmeleri bundle'dan çıkarıldı.
+Tüm alanlar canlı portala karşı doğrulandı — MHRS okuma tool'ları dahil.
 
 | Alan | Durum |
 |---|---|
@@ -20,8 +19,8 @@ canlı doğrulanmadı — sözleşmeleri bundle'dan çıkarıldı.
 | Sağlık özeti (alanlar arası derleyici) | 🟢 canlı |
 | Belge indirme (lab · patoloji · epikriz · radyoloji PDF) | 🟢 canlı |
 | MHRS bundle keşfi (161 uç · 75 okuma) | 🟢 tamam — `findings/mhrs-discovery-report.md` |
-| MHRS auth (e-Nabız SSO devri → JWT) | 🟡 kod tamam, canlı doğrulanmadı |
-| MHRS okuma: il/ilçe/klinik + yaklaşan/geçmiş randevu | 🟡 kod tamam, canlı doğrulanmadı |
+| MHRS auth (e-Nabız SSO devri → JWT) | 🟢 canlı doğrulandı |
+| MHRS okuma: il/ilçe/klinik + yaklaşan/geçmiş randevu | 🟢 canlı doğrulandı |
 | MHRS slot arama (`kurum-rss/…/slot`) | ⚪ Faz 2b — henüz tool yok |
 | MHRS randevu alma/iptal (iki-adımlı onay) | ⚪ Faz 3 — yazma; `decisions.md` D7 |
 | Canlı LLM-tool eval koşucusu | ⚪ yok (opsiyonel, ağır altyapı) |

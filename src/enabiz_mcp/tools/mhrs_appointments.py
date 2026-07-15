@@ -43,6 +43,24 @@ def _zaman(raw: Any) -> dict:
     return {k: _text(raw.get(k)) for k in keys if raw.get(k) is not None}
 
 
+def _hekim(raw: dict) -> str | None:
+    """Hekim adını birleştirir — uca göre alan adı DEĞİŞİR.
+
+    `yaklasan-randevularim` / `randevu-gecmisi` hekimi PARÇALI verir
+    (`mhrsHekimAd` + `mhrsHekimSoyad`); `randevu-arsiv` ise tek alanda
+    (`hekimAdSoyad`). Bu, canlı doğrulamada yakalandı: parser yalnız `hekimAdSoyad`
+    arıyordu ve hekim adı SESSİZCE düşüyordu — sunucu veriyi döndürüyor, kayıt
+    "geçerli" görünüyor, yalnız bir alan eksik. Boş-sonuç invaryantı bu sınıfı
+    yakalamaz; ancak canlı alan adı karşılaştırması yakalar.
+    """
+    birlesik = _text(raw.get("hekimAdSoyad"))
+    if birlesik:
+        return birlesik
+    parts = [_text(raw.get("mhrsHekimAd")), _text(raw.get("mhrsHekimSoyad"))]
+    ad = " ".join(p for p in parts if p).strip()
+    return ad or None
+
+
 def _appointment(raw: Any) -> dict | None:
     """Bir MHRS randevu DTO'sunu sözleşme alanlarına indirger.
 
@@ -63,13 +81,18 @@ def _appointment(raw: Any) -> dict | None:
         "kurum_adi": _text(raw.get("kurumAdi")),
         "ana_kurum_adi": _text(raw.get("anaKurumAdi")),
         "klinik_adi": _text(raw.get("mhrsKlinikAdi")) or _text(raw.get("klinikAdi")),
-        "hekim": _text(raw.get("hekimAdSoyad")),
+        "hekim": _hekim(raw),
         "muayene_yeri": _text(raw.get("muayeneYeriAdi")),
+        "randevu_turu": _text(raw.get("randevuTuruAdi")),
         "baslangic": _zaman(raw.get("randevuBaslangicZamaniStr")),
         "bitis": _zaman(raw.get("randevuBitisZamaniStr")),
         # `ek` = fazla mesai slotu, `shmMi` = sağlıklı hayat merkezi randevusu.
         "ek_slot": _text(raw.get("ek")),
         "shm_mi": _text(raw.get("shmMi")),
+        # Faz 3'ün ihtiyacı: sunucu bu randevunun iptal edilebilir OLUP OLMADIĞINI
+        # kendisi söylüyor. Kendi kuralımızı uydurmak yerine sunucuya soruyoruz.
+        "iptal_edilebilir": _text(raw.get("iptalEdilebilirMi")),
+        "iptal_son_zaman": _text(raw.get("iptalGecerlilikZamani")),
     }
     if isinstance(durum, dict):
         out["kayit_durumu"] = _text(durum.get("valText"))

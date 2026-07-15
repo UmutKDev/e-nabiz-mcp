@@ -116,6 +116,39 @@ def test_appointment_requires_hrn():
     assert ma._appointment(_randevu())["hrn"] == "12345678"
 
 
+def test_appointment_builds_hekim_from_split_fields():
+    """Hekim `mhrsHekimAd` + `mhrsHekimSoyad`'dan birleştirilmeli.
+
+    CANLI DOĞRULAMADA yakalanan gerçek hata: parser yalnız `hekimAdSoyad` arıyordu —
+    o ALAN `randevu-arsiv` ucuna ait. `yaklasan-randevularim` ve `randevu-gecmisi`
+    hekimi PARÇALI gönderiyor, dolayısıyla hekim adı sessizce düşüyordu: sunucu
+    veriyi döndürüyor, kayıt geçerli görünüyor, yalnız bir alan yok.
+
+    "Boş sonuç > sessiz yanlış-eşleme" invaryantı bunu YAKALAMAZ (kayıt boş değil,
+    eksik). Yakalayan tek şey canlı alan adı karşılaştırmasıydı.
+    """
+    a = ma._appointment(_randevu(mhrsHekimAd="AYŞE", mhrsHekimSoyad="YILMAZ"))
+    assert a["hekim"] == "AYŞE YILMAZ"
+
+
+def test_appointment_prefers_combined_hekim_field_when_present():
+    """`randevu-arsiv` tek alanda gönderir — o varsa kullanılır."""
+    a = ma._appointment(_randevu(hekimAdSoyad="MEHMET DEMİR"))
+    assert a["hekim"] == "MEHMET DEMİR"
+
+
+def test_appointment_omits_hekim_when_server_sends_neither():
+    """İki biçim de yoksa alan HİÇ konmaz — boş string uydurulmaz."""
+    assert "hekim" not in ma._appointment(_randevu())
+
+
+def test_appointment_carries_server_cancellability():
+    """İptal edilebilirlik SUNUCUDAN gelir — kendi kuralımızı uydurmayız (Faz 3)."""
+    a = ma._appointment(_randevu(iptalEdilebilirMi=True, iptalGecerlilikZamani="01.01.2030"))
+    assert a["iptal_edilebilir"] == "True"
+    assert a["iptal_son_zaman"] == "01.01.2030"
+
+
 def test_appointment_flattens_server_formatted_time():
     """Sunucunun parçalanmış zamanı taşınır — kendi tarih tahminimiz değil."""
     a = ma._appointment(_randevu())

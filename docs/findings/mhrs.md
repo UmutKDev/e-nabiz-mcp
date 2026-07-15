@@ -53,7 +53,35 @@ ona dokunmaz. Denylist isim-bazlıdır; burada isim yalan söyler. Bu uç yan et
 (token üretir) — `login_start`/`login_verify` ile aynı sınıfta muamele görür.
 
 `ID` kişiye özeldir ve `/Home/Randevularim?randevuAl=1` sayfasından kazınmalıdır —
-**sabit kodlanamaz (PHI)**. `vasiOnay` = vasi/kayyum onayı; vasi akışı kapsam dışı.
+**sabit kodlanamaz (PHI)**.
+
+**⚠️ ID sayfada bir LİNK DEĞİLDİR** — bu, canlı doğrulamanın çürüttüğü ilk iddiaydı.
+Yukarıdaki `?ID=...` dizisi HTML'de **hiç geçmez**; o, tarayıcının kurduğu isteğin
+şeklidir. Kaynak, "Randevu Alınacak Kişi" modalindeki `onclick` handler'ıdır:
+
+```html
+<ul class="randevuAlListe">
+  <li><a onclick="linkAl('<id>','False')">          <!-- ← ID BURADA -->
+```
+```js
+function linkAl(id, vasiOnay) {
+  $.ajax({ data: { ID: id, vasiOnay: vasiOnay }, url: "/Randevu/RandevuAl", type: "GET", … })
+}
+```
+
+İlk regex (`/Randevu/RandevuAl\?ID=(\d+)`) kullanıcının yakaladığı **curl'den**
+türetilmişti — yani *isteğin* şeklinden, *kaynağın* şeklinden değil. Canlıda hiçbir
+zaman eşleşmedi ve zincir daha ilk adımda kırıldı. Ders: yakalanan bir istek, o
+isteğin nereden doğduğunu göstermez.
+
+Tuzak: `linkAlTekrar('id','False','il',…)` ("Randevuyu Tekrarla") aynı önekle başlar,
+canlı sayfada 5 kez geçer ve **farklı** bir uca gider (`/Randevu/RandevuAlTekrar`).
+Regex `linkAl`'dan hemen sonra `(` istemelidir.
+
+`vasiOnay` = vasi/kayyum onayı. Modal bir **liste**dir: kullanıcı + varsa vesayeti
+altındakiler. `vasiOnay=False` olan kayıt kullanıcının KENDİSİdir; vasi akışı kapsam
+dışıdır. Birden fazla vasi-olmayan kayıt varsa kod **hata verir, ilkini seçmez** —
+belirsizlikte randevu yanlış kişiye yazılabilir.
 
 **2. JWT değişimi (MHRS tarafı)**
 
@@ -191,10 +219,28 @@ kuran, slot detayını isteyen çağrının kendisi.
 kilit gerçekse bu YANLIŞ ve `book_prepare` iptal edildiğinde kilidi bırakmak
 zorunda. Faz 3'te canlı doğrulanacak.
 
-### Faz 2 sözleşmeleri (bundle'dan çıkarıldı; canlı DOĞRULANMADI)
+### Faz 2 sözleşmeleri — CANLI DOĞRULANDI (build 2.1.405, 2026-07-15)
 
-Aşağıdaki alan adları istemci kodundan okundu — sunucunun o imzayla yanıt verdiği
-kanıtlanmadı. Ölü kod olabilir; Faz 2 canlı çalıştığında düzeltilecek.
+Aşağıdakiler önce bundle'dan çıkarıldı, sonra canlı hesaba karşı koşuldu. Canlı
+tur iki şeyi düzeltti:
+
+**1. Hekim adı SESSİZCE düşüyordu.** `yaklasan-randevularim` ve `randevu-gecmisi`
+hekimi PARÇALI gönderiyor (`mhrsHekimAd` + `mhrsHekimSoyad`); tek alanlı
+`hekimAdSoyad` yalnız `randevu-arsiv`'e ait. Parser yanlış alanı arıyordu → hekim
+adı hiç gelmiyordu. Kayıt boş değil, **eksikti** — "boş sonuç > sessiz yanlış-eşleme"
+invaryantı bu sınıfı yakalamaz; yakalayan tek şey canlı alan adı karşılaştırmasıydı.
+
+**2. Sunucu beklenenden ÇOK daha fazla alan döndürüyor** — randevu DTO'sunda 43 alan.
+Faz 3 için kritik olanı: **`iptalEdilebilirMi`** ve `iptalGecerlilikZamani` — yani
+iptal edilebilirliği kendi kuralımızla hesaplamamıza gerek yok, sunucu söylüyor.
+Ayrıca `randevuTuruAdi`, `randevuNotu`, `gizliRandevu`, `goruntuluRandevuLinki`,
+`ayniHekimdenRandevuAl`, `randevuGeriAlinabilir` var (henüz kullanılmıyor).
+
+Canlı ölçümler: il **85** kayıt (81 değil — MHRS İstanbul'u ANADOLU/AVRUPA diye
+`children` ile bölüyor), klinik 80. `randevuBaslangicZamaniStr` beklenen
+`{tarih, gun, saat, zaman}`'ın yanında `date`, `gunAyGunIsmi`, `tarihAy` da taşıyor.
+
+Slot uçlarının (`kurum-rss/...`) gövde şekli HÂLÂ canlı doğrulanmadı — Faz 2b.
 
 **`POST kurum-rss/randevu/slot-sorgulama/slot`** — gövde:
 `aksiyonId, mhrsKurumId, mhrsKlinikId, mhrsHekimId, mhrsIlId, mhrsIlceId,

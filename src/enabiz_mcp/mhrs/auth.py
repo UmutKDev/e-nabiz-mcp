@@ -46,7 +46,20 @@ ISLEM_KANALI = "VATANDAS_ENABIZ"
 _EXPIRY_SKEW = 120.0
 
 _TOKEN_RE = re.compile(r"enabizToken=([0-9a-fA-F-]{36})")
-_PERSON_ID_RE = re.compile(r"/Randevu/RandevuAl\?ID=(\d+)", re.IGNORECASE)
+
+# Kişi id'si sayfada bir LİNK olarak DEĞİL, "Randevu Alınacak Kişi" modalindeki
+# `onclick` handler'ında durur:
+#     <ul class="randevuAlListe">
+#       <li><a onclick="linkAl('<id>','False')">
+# `linkAl` sonra AJAX kurar: `data: {ID: id, vasiOnay: vasiOnay}, url: "/Randevu/RandevuAl"`.
+# Yani `/Randevu/RandevuAl?ID=<id>` dizisi HTML'de HİÇ GEÇMEZ — o, tarayıcının kurduğu
+# istektir. İlk sürüm regex'i kullanıcının yakaladığı curl'den türetilmişti (isteğin
+# şekli), sayfadan değil (kaynağın şekli); canlıda hiçbir zaman eşleşmedi.
+#
+# `\(` şart: `linkAlTekrar('id','False','il',…)` ("Randevuyu Tekrarla") aynı önekle
+# başlar ve canlı sayfada 5 kez geçer, ama farklı bir uca (`/Randevu/RandevuAlTekrar`)
+# gider. `linkAl` hemen ardından `(` istemek onu eler.
+_PERSON_ID_RE = re.compile(r"\blinkAl\('(\d+)','(True|False)'\)", re.IGNORECASE)
 
 
 class MhrsError(RuntimeError):
@@ -112,17 +125,31 @@ def scrape_person_id(client: httpx.Client) -> str:
     """`/Home/Randevularim?randevuAl=1` sayfasından kişiye özel `ID`'yi kazır.
 
     Bu değer PHI'dir ve SABİT KODLANAMAZ — her hesapta farklıdır.
+
+    Sayfa "Randevu Alınacak Kişi" modalinde bir LİSTE tutar: kullanıcının kendisi ve
+    varsa vesayeti altındaki kişiler. `vasiOnay=False` olan kayıt KULLANICININ
+    KENDİSİdir; `True` olanlar başkası adına randevu içindir ve bu tool'ların kapsamı
+    DIŞINDADIR — vasi akışına yanlışlıkla girip başka birine randevu yazmak, kimlik
+    karışmasının en pahalı hâli olurdu.
     """
     html = client.get(RANDEVULARIM_PAGE).text
     if 'name="TCKimlikNo"' in html:  # login'e yönlendirildi
         raise enabiz_auth.AuthRequired("Randevularım: e-Nabız oturumu düşmüş.")
-    m = _PERSON_ID_RE.search(html)
-    if not m:
+
+    own = [pid for pid, vasi in _PERSON_ID_RE.findall(html) if vasi.lower() == "false"]
+    if not own:
         raise MhrsError(
-            "Randevularım sayfasında RandevuAl bağlantısı bulunamadı — sayfa yapısı "
-            "değişmiş olabilir."
+            "Randevularım sayfasında 'Randevu Alınacak Kişi' girdisi bulunamadı — "
+            "sayfa yapısı değişmiş olabilir."
         )
-    return m.group(1)
+    if len(own) > 1:
+        # Sessizce ilkini SEÇME: hangi kişi olduğu belirsizse randevu yanlış kişiye
+        # yazılabilir. Boş/ hata dönmek, yanlış kişiye yazmaktan iyidir.
+        raise MhrsError(
+            f"Randevularım sayfasında birden fazla ({len(own)}) vasi-olmayan kişi var; "
+            "hangisinin kullanıcı olduğu belirsiz — güvenli seçim yapılamadı."
+        )
+    return own[0]
 
 
 def mint_enabiz_token(client: httpx.Client, person_id: str | None = None) -> str:
