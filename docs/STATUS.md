@@ -5,7 +5,7 @@ Son güncelleme: 2026-07-15
 ## Nerede
 
 Giriş (XSRF + SMS OTP) → oturum kalıcılığı → kimlikli veri çekme → HTML parse →
-yapılandırılmış MCP çıktısı. **43 tool / 20 veri alanı**. Sağlık verisi salt-okunur;
+yapılandırılmış MCP çıktısı. **47 tool / 20 veri alanı**. Sağlık verisi salt-okunur;
 yazma yalnız MHRS randevu alma/iptalinde (iki adımlı onaylı, D7).
 Tüm alanlar canlı portala karşı doğrulandı — MHRS okuma tool'ları dahil.
 
@@ -22,26 +22,28 @@ Tüm alanlar canlı portala karşı doğrulandı — MHRS okuma tool'ları dahil
 | MHRS bundle keşfi (161 uç · 75 okuma) | 🟢 tamam — `findings/mhrs-discovery-report.md` |
 | MHRS auth (e-Nabız SSO devri → JWT) | 🟢 canlı doğrulandı |
 | MHRS okuma: il/ilçe/klinik + yaklaşan/geçmiş randevu | 🟢 canlı doğrulandı |
-| MHRS slot arama (`kurum-rss/…/arama` + `/slot`) | 🟡 kod tamam, canlı doğrulanmadı |
-| MHRS randevu alma/iptal (iki-adımlı onay) | 🟡 kod tamam, canlı DENENMEDİ — gerçek randevu yazar |
+| MHRS slot arama (`kurum-rss/…/arama` + `/slot`) | 🟢 canlı doğrulandı |
+| MHRS randevu talebi (yer açılınca haber ver) | 🟢 canlı doğrulandı |
+| MHRS tekrar randevu (`rebook_criteria`) | 🟢 canlı doğrulandı |
+| MHRS randevu alma/iptal (iki-adımlı onay) | 🟢 canlı doğrulandı (alındı + iptal edildi) |
 | Canlı LLM-tool eval koşucusu | ⚪ yok (opsiyonel, ağır altyapı) |
 
 **Canlı doğrulama:** tüm alanlar gerçek bir hesapta çalıştırıldı; parser'lar dolu
 veri döndürdü. Kayıt sayıları burada YAZILMAZ — kardinalite de PHI'dir
 (bkz. `tests/test_no_cardinality.py`).
 
-## Tool yüzeyi (43)
+## Tool yüzeyi (47)
 
 Oturum (3) · sağlık özeti (1) · liste (18) · detay (9) · `enabiz_download_document` (1)
-· MHRS okuma (7) · MHRS randevu YAZMA (4). Veri alanı = 18 liste ucu + profil +
-MHRS randevu = **20**. Tam liste: [README](../README.md#toollar-43).
+· MHRS okuma (10) · MHRS YAZMA (6: randevu 4 + talep 2). Veri alanı = 18 liste ucu + profil +
+MHRS randevu = **20**. Tam liste: [README](../README.md#toollar-47).
 
 MHRS tool'ları `enabiz_mhrs_*` ile ayrılır: `prd.mhrs.gov.tr` e-Nabız'dan AYRI bir
 sistemdir ve SSO ile devredilir. `enabiz_list_appointments` e-Nabız'ın HTML
 tablosunu okur; MHRS tool'ları API'yi okur ve `hrn` döndürür — tabloda yok,
 iptalin anahtarı.
 
-**Yazma yüzeyi:** 43 tool'un 6'sı `readOnlyHint: False` — 2 login + 4 MHRS randevu
+**Yazma yüzeyi:** 47 tool'un 8'i `readOnlyHint: False` — 2 login + 4 MHRS randevu
 (`book_prepare`, `book_confirm`, `book_cancel_prepare`, `cancel`). `book_prepare`
 randevu almaz ama `False`, çünkü MHRS o çağrıda slotu kilitliyor olabilir.
 Çalışma-zamanı kapısı: `api_client` varsayılan olarak yazma sınıfı bir uca gitmeyi

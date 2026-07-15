@@ -20,8 +20,13 @@ E-Nabız keşfinden ayrıldığı yerler (hepsi canlı bundle'da doğrulandı):
 - **Fiil yolun ORTASINDADIR, sonda id vardır** (`kurum/randevu/iptal-et/{hrn}`).
   `enabiz_mcp.discovery._action_segment` gibi son segmente bakmak `{hrn}` döndürür
   ve fiili tamamen kaçırır → burada TÜM yol taranır.
-- **HTTP metodu güvenlik sinyali DEĞİLDİR.** MHRS 12 ucu GET ile yazar; en
-  çarpıcısı `GET kurum/randevu/ayni-hekimden-randevu-al/{id}` — GET ile randevu alır.
+- **HTTP metodu güvenlik sinyali DEĞİLDİR.** MHRS 11 ucu GET ile yazar
+  (`iptal-et`, `geri-al`, `gizle`, `onayla`, `reddet`, `bilgilendir`) ve 2 ucu POST
+  ile okur (slot arama).
+- **AD da güvenlik sinyali değildir — ölçüm gerekir.** `ayni-hekimden-randevu-al`
+  randevu ALMAZ; geçmiş randevudan arama kriterleri döndürür (canlıda ölçüldü,
+  bkz. `_VERIFIED_READS`). Bir tur bu uç "en tehlikelisi, GET ile randevu alır"
+  diye belgelendi — ada inanıldı, ölçülmedi.
 """
 
 from __future__ import annotations
@@ -75,6 +80,41 @@ _READ_POSTS = frozenset(
         # Slot listesi — Faz 2'nin kalbi; seçilen kurum+klinik için boş saatler.
         "kurum-rss/randevu/slot-sorgulama/slot",
     }
+)
+
+# Adı YAZMA gibi görünen ama CANLIDA ölçülmüş OKUMALAR.
+#
+# Bu liste ad kapısından ÖNCE koşar — yani `_WRITE_TOKENS`'ı ezer. Tehlikeli bir
+# yetki, o yüzden ölçütü tektir ve serttir: **canlıda çağrılmış, öncesi/sonrası
+# durum karşılaştırılmış ve hiçbir şey değişmediği görülmüş olmalı.** "Bundle öyle
+# kullanıyor gibi duruyor" YETMEZ.
+#
+# `ayni-hekimden-randevu-al/{hrn}` — geçmiş bir randevudan TEKRAR randevu almak için
+# arama kriterlerini döndürür; randevu ALMAZ. Canlı kanıt (2026-07-15):
+#     GET .../ayni-hekimden-randevu-al/<hrn> → 200, success: true
+#     data: {mhrsKurumId, mhrsKlinikId, mhrsHekimId, mhrsIlId, fkMuayeneYeriId,
+#            aksiyonId, kurumAdi, klinikAdi, ilAdi, aileHekimi, aileDisHekimi}
+#     aktif randevu listesi ÖNCE == SONRA → yazmadı.
+# Bundle da aynısını söylüyor: yanıtı slot ARAMA gövdesine çeviriyor (chunk-27/45).
+#
+# Bu uç bir tur "MHRS'nin EN TEHLİKELİ ucu: GET ile randevu alır" diye belgelendi —
+# CLAUDE.md, mhrs.md, testler ve rapor bunu tekrarladı. Yanlıştı: **ada inanıldı,
+# ölçülmedi.** `/Randevu/RandevuAl`'ın aynısı (adı randevu alır der, SSO token basar)
+# ve `HATIRLATMA_SAAT_SECIMI`'nin akrabası (çağrı var, sonucu kullanılmıyor).
+# Sıra: ölç → sonra sınıfla.
+#
+# Anahtar (METOD, desen) — yalnız yol DEĞİL. Ölçüm bir metoda aittir: `GET .../x`in
+# yazmadığını görmek `POST .../x`in de yazmadığını göstermez. Metotsuz bir liste
+# ölçmediğimiz metotlara sessizce okuma damgası verirdi.
+#
+# Desen REGEX, düz string değil — çünkü bu sınıflandırıcı İKİ bağlamda kullanılır:
+#   keşif       → route ŞABLONU  ("…/ayni-hekimden-randevu-al/{p1}")
+#   çalışma zam. → SOMUT yol     ("…/ayni-hekimden-randevu-al/3KNBUGS")
+# Düz string eşleşmesi biriyle tutar, ötekiyle tutmaz. İlk sürüm şablonu yazıyordu:
+# testler (şablon) geçti, canlı çağrı (somut) `WriteNotAllowed` ile patladı.
+# Desen çapalıdır ve SON segmentte tam bir parça ister — alt yollara sızmaz.
+_VERIFIED_READS = (
+    ("GET", re.compile(r"^kurum/randevu/ayni-hekimden-randevu-al/[^/]+$")),
 )
 
 # GET ile YAZAN uçlar için ad-bazlı denylist. Bunlar olmadan replay randevu alır.
@@ -365,19 +405,24 @@ def classify_mhrs_call(method: str, path: str) -> Verdict:
 
     Kapılar, SIRAYLA — sıra davranışın parçasıdır:
 
+    0. **Ölçülmüş okuma** (`_VERIFIED_READS`): canlıda çağrılıp yazmadığı KANITLANMIŞ
+       uçlar. Ad kapısını EZER, çünkü ölçüm addan üstündür. Girmesi zordur: kanıt
+       şart.
     1. **Ad**: TÜM yolda (son segmentte değil — MHRS'de fiil ortadadır) bir yazma
-       sözcüğü varsa 'write'. Bu kapı ÖNCE koşar ki `_READ_POSTS` istisnası bir
-       yazma sözcüğünü asla ezemesin — istisna listesine yanlışlıkla `.../iptal-et`
-       konsa bile yazma damgası kazanır.
+       sözcüğü varsa 'write'. Bu kapı `_READ_POSTS`'tan ÖNCE koşar ki gövdeli-arama
+       istisnası bir yazma sözcüğünü asla ezemesin — listeye yanlışlıkla
+       `.../iptal-et` konsa bile yazma damgası kazanır.
     2. **Metod**: POST/PUT/DELETE → 'write'; tek çıkış `_READ_POSTS` (gövdeli arama).
     3. **Okuma sözcüğü** → 'read'. Hiçbiri yoksa 'unknown' (temkinli: replay EDİLMEZ).
 
-    GET'in güvenli olduğunu VARSAYMAZ: canlı MHRS'de 12 uç GET ile yazar (`iptal-et`,
-    `geri-al`, `gizle`, `onayla`, `reddet`, `bilgilendir` ve en tehlikelisi
-    `ayni-hekimden-randevu-al` — GET ile randevu alır). Simetrik olarak POST'un
-    yazdığını da varsaymaz: slot arama gövdeli bir OKUMA'dır.
+    Ne GET'in okuduğunu ne POST'un yazdığını varsayar. MHRS 11 ucu GET ile YAZAR
+    (`iptal-et`, `geri-al`, `gizle`, `onayla`, `reddet`, `bilgilendir`) ve iki ucu
+    POST ile OKUR (slot arama). Ad da yalan söyleyebilir: `ayni-hekimden-randevu-al`
+    randevu ALMAZ, arama kriterleri döndürür — canlıda ölçüldü, bkz. `_VERIFIED_READS`.
     """
     clean = _strip_query(path)
+    if any(m == method.upper() and rx.match(clean) for m, rx in _VERIFIED_READS):
+        return "read"
     if _WRITE_TOKENS.search(clean):
         return "write"
     if method.upper() in WRITE_METHODS:

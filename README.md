@@ -9,7 +9,7 @@ E-Nabız (T.C. Sağlık Bakanlığı **Kişisel Sağlık Sistemi**) verilerinize
 
 ## Durum
 
-🟢 Çekirdek çalışıyor: **43 tool / 20 veri alanı**. Sağlık verisi salt-okunur;
+🟢 Çekirdek çalışıyor: **47 tool / 20 veri alanı**. Sağlık verisi salt-okunur;
 yazma yalnız MHRS randevu alma/iptalinde (iki adımlı onaylı). İlerleme:
 [`docs/STATUS.md`](docs/STATUS.md).
 
@@ -28,7 +28,7 @@ Bu bir niyet beyanından ibaret olmasın diye, her madde kodda doğrulanabilir:
 | **Yalnızca kendi veriniz** | Kimlik bilgileri yalnız `.env`'den okunur, tool argümanı değildir (LLM bağlamına hiç girmez). Başka bir hesaba erişecek bir yol yoktur — portal zaten kendi TC kimliğinize gelen SMS'i ister. |
 | **Sağlık veriniz salt-okunur** | Hiçbir tool sağlık verinize yazmaz: e-Nabız'ın yazma uçlarına (`/Sil`, `/Kaydet`, `/Iptal` …) dokunulmaz. Bu bir söz değil, test edilen bir invaryant — keşif tarayıcısı bir yazma ucuna dokunursa suite kasten patlar (`tests/test_discover_scan.py:45`). |
 | **Randevu yazması sınırlı ve onaylı** | MHRS randevu **alabilir ve iptal edebilir** — projenin tek yazma yüzeyi (giriş dışında). Tek adımda olmaz: `book_prepare` slotu sunucuda doğrulayıp `confirm_token` döner, `book_confirm` alır. Token yalnız doğrulanmış slot için üretilir ve süreç belleğinde tutulur, yani **model bir slot id uydurup size randevu yazamaz**. İptal `confirm=True` ister. Ayrıca çalışma-zamanı kapısı: yazma sınıfı bir uca `allow_write=True` demeden gidilirse istek `WriteNotAllowed` ile durur. |
-| **Dürüst tool anotasyonları** | 43 tool'un 37'si `readOnlyHint: True`. İşaretlenmeyen 6'sı: `login_start`/`login_verify` (telefonunuza SMS gider, oturum yazılır) ve 4 MHRS randevu tool'u (gerçekten yazarlar). `book_prepare` bile `False` — çünkü MHRS o çağrıda slotu kilitliyor olabilir. Her şeye "salt-okunur" damgası vurulmadı. |
+| **Dürüst tool anotasyonları** | 47 tool'un 39'u `readOnlyHint: True`. İşaretlenmeyen 8'i: `login_start`/`login_verify` (telefonunuza SMS gider, oturum yazılır) 4 MHRS randevu + 2 MHRS talep tool'u (gerçekten yazarlar). `book_prepare` bile `False` — çünkü MHRS o çağrıda slotu kilitliyor olabilir. Her şeye "salt-okunur" damgası vurulmadı. |
 | **Güvenlik kontrolleri atlatılmaz** | reCAPTCHA çözülmez, SMS OTP kaldırılmaz veya kırılmaz — kod **her zaman** sizin kayıtlı telefonunuza gider ve giriş insan-döngüdedir. Otomasyon, kodu elle girmenin yerine geçer; kontrolün kendisini ortadan kaldırmaz. |
 | **Veri sizde kalır** | Yalnız yerel `stdio`. Harici API, telemetri, analytics yok. PDF'ler diskinize `chmod 600` ile iner; içerik LLM'e verilmez, yalnız `{saved_path, byte_size, sha256, content_type}` döner. |
 | **Portala saygı** | İstekler arası hız sınırı (`ENABIZ_MIN_INTERVAL`, varsayılan 0.5 sn) — sunucuya yük bindirmemek için. Toplu/hızlı veri çekme aracı değildir. |
@@ -201,7 +201,7 @@ yolları elle yazın:
 olarak saklanır ve süresi (~30–60 dk) dolana dek yeniden kullanılır. Oturum düşerse veri
 tool'ları `error: "auth_required"` döner; yeniden giriş yapın.
 
-## Tool'lar (43)
+## Tool'lar (47)
 
 **Oturum:** `enabiz_login_start` · `enabiz_login_verify` · `enabiz_session_status`
 
@@ -225,10 +225,12 @@ tool'ları `error: "auth_required"` döner; yeniden giriş yapın.
 
 **MHRS — arama (salt-okunur):** `enabiz_mhrs_list_provinces` · `enabiz_mhrs_list_districts` ·
 `enabiz_mhrs_list_clinics` · `enabiz_mhrs_list_upcoming` · `enabiz_mhrs_list_history` ·
-`enabiz_mhrs_search_institutions` · `enabiz_mhrs_search_slots`
+`enabiz_mhrs_search_institutions` · `enabiz_mhrs_search_slots` ·
+`enabiz_mhrs_rebook_criteria` · `enabiz_mhrs_list_requests`
 
 **MHRS — randevu (YAZMA):** `enabiz_mhrs_book_prepare` → `enabiz_mhrs_book_confirm` ·
-`enabiz_mhrs_book_cancel_prepare` · `enabiz_mhrs_cancel`
+`enabiz_mhrs_book_cancel_prepare` · `enabiz_mhrs_cancel` ·
+`enabiz_mhrs_create_request` · `enabiz_mhrs_delete_request`
 
 > MHRS (`prd.mhrs.gov.tr`) e-Nabız'dan **ayrı bir sistemdir**; e-Nabız'ın "Randevu Al"
 > düğmesinin arkasındaki SSO devriyle bağlanılır. `enabiz_list_appointments` e-Nabız'ın

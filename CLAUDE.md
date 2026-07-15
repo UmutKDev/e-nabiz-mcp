@@ -15,6 +15,9 @@ Bu dosya *her zaman geçerli* olanı tutar. Adım-adım iş akışları skill'le
      tarayıcısı bir yazma ucuna dokunursa suite kasten patlar —
      `tests/test_discover_scan.py:44-45`. `discovery.py:56-59` denylist'i
      (`RandevuAl`/`ManuelRandevu` dahil) **aynen durur, gevşetilmez**.
+     MHRS sınıflayıcısında ad kapısını yalnız `_VERIFIED_READS` ezer: canlıda
+     çağrılıp yazmadığı ÖLÇÜLMÜŞ uçlar (ör. `ayni-hekimden-randevu-al` randevu almaz,
+     kriter döndürür). Ölçüm olmadan giriş YOK.
    - **MHRS (randevu): YAZMA AÇIK.** Randevu alma/iptal `prd.mhrs.gov.tr` API'sinde,
      `readOnlyHint: False` ve **iki-adımlı onay** ile yapılır: `book_prepare` slotu
      doğrulayıp `confirm_token` döner, `book_confirm` randevuyu alır. Tek adımlı bir

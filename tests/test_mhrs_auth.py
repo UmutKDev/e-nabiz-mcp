@@ -62,7 +62,7 @@ def _error(kodu: str, mesaj: str = "hata") -> dict:
     [
         ("POST", "kurum/randevu/randevu-ekle"),
         ("GET", "kurum/randevu/iptal-et/123"),  # GET ama YAZMA
-        ("GET", "kurum/randevu/ayni-hekimden-randevu-al/9"),  # GET ile randevu ALIR
+        ("GET", "kurum/randevu/geri-al/9"),  # GET ile YAZAR
         ("DELETE", "kurum/randevu/slot-kilitleme"),
     ],
 )

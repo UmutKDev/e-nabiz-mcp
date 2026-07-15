@@ -362,11 +362,10 @@ Randevu nesnesi: `hastaRandevuNumarasi` (= **hrn**, iptalin anahtarı),
 
 ### ⚠️ Yazma — GET ile yazan uçlar
 
-**HTTP metodu güvenlik sinyali DEĞİLDİR.** MHRS'de 12 uç GET ile yazar:
+**HTTP metodu güvenlik sinyali DEĞİLDİR.** MHRS'de 11 uç GET ile yazar:
 
 | Uç | Etki |
 |---|---|
-| `GET kurum/randevu/ayni-hekimden-randevu-al/{id}` | **GET ile RANDEVU ALIR** |
 | `GET kurum/randevu/iptal-et/{hrn}` · `iptal-et-hrn-uuid/{p1}/{p2}` | randevu iptal eder |
 | `GET kurum/randevu/geri-al/{id}` | işlemi geri alır |
 | `GET kurum/randevu/degisikligi-onayla/{id}` · `-reddet/{id}` · `degisikligi-istisna-*` | değişiklik onay/ret |
@@ -515,3 +514,42 @@ eşleşmeyi o onaylar.
 Talep durumları `randevuTalepDurumu.val` ile gelir; talep listesindeki "Randevu Al"
 butonu yalnız belirli durumlarda açıktır (`disabled: ![A,O].includes(val)`) — yani
 "silinebilir"/"yenilenebilir" gibi bu karar da SUNUCUNUNDUR, bizim değil.
+
+
+### ⚠️ `ayni-hekimden-randevu-al` randevu ALMAZ — ad yalan söylüyor (canlıda ölçüldü)
+
+Bu uç uzun süre **"MHRS'nin en tehlikeli ucu: GET ile randevu alır"** diye belgelendi
+— `CLAUDE.md`, bu dosya, testler ve keşif raporu bunu tekrarladı. **Yanlıştı.**
+
+Canlı ölçüm (2026-07-15), geçmiş bir Nöroloji randevusunun `hrn`'i ile:
+
+```
+GET kurum/randevu/ayni-hekimden-randevu-al/<hrn>  → 200, success: true
+data: {mhrsKurumId, mhrsKlinikId, mhrsHekimId, mhrsIlId, fkMuayeneYeriId,
+       aksiyonId, kurumAdi, klinikAdi, ilAdi, aileHekimi, aileDisHekimi}
+aktif randevu listesi ÖNCE == SONRA   → hiçbir şey yazılmadı
+```
+
+Yani uç, geçmiş bir randevudan **tekrar randevu aramak için gereken kriterleri**
+döndürür. Bundle da aynısını yapar: yanıtı doğrudan slot ARAMA gövdesine çevirir
+(chunk-27/45), sonra `getSelectedSlotListesi` çağırır.
+
+Randevu tekrarlama akışı bu yüzden şudur — ve **yazma içermez**:
+
+```
+list_history → hrn (DTO'da ayniHekimdenRandevuAl: true)
+  → rebook_criteria(hrn)        ← kriterler, YAZMAZ
+  → search_slots(...)           ← hekimin güncel boş saatleri
+  → boş saat varsa book_prepare → book_confirm   (yazma BURADA başlar)
+  → boş saat yoksa create_request (talep)
+```
+
+**Ders — üçüncü kez aynı sınıf:**
+- `/Randevu/RandevuAl` → adı randevu alır der, **SSO token basar**
+- `HATIRLATMA_SAAT_SECIMI` → çağrı var, **sonucu kullanılmıyor** (ölü kod)
+- `ayni-hekimden-randevu-al` → adı randevu alır der, **kriter döndürür**
+
+Ad-bazlı sınıflama GET tuzağına karşı doğru bir savunma, ama **ada inanmak ölçmenin
+yerine geçmez**. `_VERIFIED_READS` bu yüzden var ve girişi tek ölçüte bağlı: canlıda
+çağrılmış, öncesi/sonrası karşılaştırılmış, değişmediği görülmüş. "Bundle öyle
+kullanıyor gibi" yetmez.

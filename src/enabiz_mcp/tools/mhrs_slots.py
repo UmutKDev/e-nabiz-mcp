@@ -29,6 +29,7 @@ from ._common import auth_guarded
 
 ARAMA_PATH = "kurum-rss/randevu/slot-sorgulama/arama"
 SLOT_PATH = "kurum-rss/randevu/slot-sorgulama/slot"
+REBOOK_PATH = "kurum/randevu/ayni-hekimden-randevu-al/{hrn}"
 
 #: "Farketmez / hepsi" sentinel'i — MHRS her boş form alanı için bunu gönderir.
 ANY_ID = -1
@@ -61,6 +62,13 @@ def _id(value: str | None) -> int:
         return int(str(value).strip())
     except ValueError:
         return ANY_ID
+
+
+def _text(v: Any) -> str | None:
+    """Skaler alanı `str | None`'a indirger — ev kuralı: sayıya çevirme."""
+    if v is None or isinstance(v, (dict, list)):
+        return None
+    return str(v)
 
 
 def _saat(raw: Any) -> dict | None:
@@ -301,6 +309,47 @@ def register(mcp: FastMCP) -> None:
         out = {"count": len(adaylar), "candidates": adaylar, "note": _NO_POLL}
         if notices:
             out["notices"] = notices
+        return out
+
+    @mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": True})
+    @auth_guarded
+    def enabiz_mhrs_rebook_criteria(hrn: str) -> dict:
+        """Geçmiş bir randevudan **aynı hekime tekrar** randevu arama kriterlerini alır.
+
+        **Randevu ALMAZ** — adı (`ayni-hekimden-randevu-al`) öyle iddia etse de.
+        Canlıda ölçüldü: yalnız kriterleri döndürür, aktif randevu listesi değişmez.
+
+        - `hrn`: `enabiz_mhrs_list_history`'den gelen hasta randevu numarası.
+          Randevunun kendisi tekrar-alınabilir olmalı (ham DTO'da
+          `ayniHekimdenRandevuAl: true`).
+
+        Dönen alanları doğrudan `enabiz_mhrs_search_slots`'a geçirin — hekimin
+        güncel boş saatlerini o verir. Uygun saat yoksa `enabiz_mhrs_create_request`
+        ile talep bırakılabilir.
+        """
+        cfg = Config.from_env()
+        session = mhrs_session(cfg)
+        with api_client(cfg, session.jwt) as client:
+            data = unwrap(client.get(REBOOK_PATH.format(hrn=hrn)))
+        if not isinstance(data, dict):
+            return {"error": "mhrs_error", "message": "Kriterler beklenen şekilde gelmedi."}
+        out = {
+            "province_id": _text(data.get("mhrsIlId")),
+            "institution_id": _text(data.get("mhrsKurumId")),
+            "clinic_id": _text(data.get("mhrsKlinikId")),
+            "doctor_id": _text(data.get("mhrsHekimId")),
+            "aksiyon_id": _text(data.get("aksiyonId")),
+            "exam_place_id": _text(data.get("fkMuayeneYeriId")),
+            "kurum_adi": _text(data.get("kurumAdi")),
+            "klinik_adi": _text(data.get("klinikAdi")),
+            "il_adi": _text(data.get("ilAdi")),
+            "aile_hekimi": _text(data.get("aileHekimi")),
+        }
+        out = {k: v for k, v in out.items() if v is not None}
+        out["next"] = (
+            "Bu alanları enabiz_mhrs_search_slots'a geçirin. Uygun saat çıkmazsa "
+            "enabiz_mhrs_create_request ile talep bırakılabilir."
+        )
         return out
 
     @mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": True})

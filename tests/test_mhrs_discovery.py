@@ -1,8 +1,11 @@
 """`enabiz_mcp.mhrs.discovery` — saf bundle çıkarımı ve salt-okunur sınıflama.
 
-En kritik test sınıfı: **GET ile yazan uçlar**. MHRS 12 ucu GET ile yazar; en
-tehlikelisi `ayni-hekimden-randevu-al` GET ile randevu ALIR. "GET = okuma" varsayan
-bir tarayıcı replay sırasında kullanıcıya gerçek randevu yazardı.
+En kritik test sınıfı: **GET ile yazan uçlar**. MHRS 11 ucu GET ile yazar
+(`iptal-et`, `geri-al`, `gizle`, `onayla`, `reddet`, `bilgilendir`); "GET = okuma"
+varsayan bir tarayıcı replay sırasında kullanıcının randevusunu iptal ederdi.
+
+Simetrik iki tuzak da burada kilitli: MHRS **POST ile okur** (slot arama) ve **ad
+yalan söyleyebilir** (`ayni-hekimden-randevu-al` randevu ALMAZ — canlıda ölçüldü).
 """
 
 from __future__ import annotations
@@ -38,7 +41,6 @@ def _paths(calls: list[m.MhrsCall], method: str | None = None) -> set[str]:
     [
         "kurum/randevu/iptal-et/{p1}",
         "kurum/randevu/iptal-et-hrn-uuid/{p1}/{p2}",
-        "kurum/randevu/ayni-hekimden-randevu-al/{p1}",
         "kurum/randevu/geri-al/{p1}",
         "kurum/randevu/degisikligi-onayla/{p1}",
         "kurum/randevu/degisikligi-reddet/{p1}",
@@ -70,14 +72,59 @@ def test_write_verb_is_found_mid_path_not_last_segment():
     assert m.classify_mhrs_call("GET", "kurum/randevu/iptal-et/{p1}") == "write"
 
 
-def test_mhrs_denylist_catches_kebab_case_randevu_al():
+def test_mhrs_denylist_catches_kebab_case():
     """MHRS denylist'i kebab-case yakalar — bu, MHRS'nin kendi regex'i olmasının SEBEBİ.
 
     e-Nabız'ın denylist'i bitişik `RandevuAl` arar; MHRS'nin tüm isimlendirmesi
     kebab-case olduğu için orada körelir. Bu test yalnız MHRS tarafını kilitler
     (e-Nabız'ın davranışını assert ETMEZ — orası düzelirse burası kırılmasın).
     """
-    assert m.classify_mhrs_call("GET", "kurum/randevu/ayni-hekimden-randevu-al/{p1}") == "write"
+    assert m._WRITE_TOKENS.search("randevu-al") is not None
+    assert m.classify_mhrs_call("GET", "kurum/randevu/uydurma-randevu-al/{p1}") == "write"
+
+
+def test_verified_read_beats_the_name_gate():
+    """`ayni-hekimden-randevu-al` randevu ALMAZ — CANLIDA ölçüldü, ada rağmen 'read'.
+
+    Bu uç uzun süre "MHRS'nin en tehlikeli ucu: GET ile randevu alır" diye
+    belgelendi (CLAUDE.md, mhrs.md, testler, rapor). Yanlıştı — ada inanıldı,
+    ölçülmedi. Canlı: yalnız arama kriterlerini döndürüyor
+    (`{mhrsKurumId, mhrsKlinikId, mhrsHekimId, mhrsIlId, fkMuayeneYeriId, aksiyonId}`)
+    ve aktif randevu listesi öncesi/sonrası AYNI kalıyor.
+    """
+    assert m.classify_mhrs_call("GET", "kurum/randevu/ayni-hekimden-randevu-al/{p1}") == "read"
+
+
+def test_verified_read_is_scoped_to_the_measured_method():
+    """İstisna (METOD, yol) çiftidir — ölçüm bir metoda aittir.
+
+    `GET .../x`in yazmadığını ölçmek `POST .../x`in de yazmadığını GÖSTERMEZ.
+    Yol-bazlı bir liste ölçülmemiş metotlara sessizce okuma damgası verirdi.
+    """
+    assert m.classify_mhrs_call("GET", "kurum/randevu/ayni-hekimden-randevu-al/{p1}") == "read"
+    assert m.classify_mhrs_call("POST", "kurum/randevu/ayni-hekimden-randevu-al/{p1}") == "write"
+
+
+def test_verified_reads_do_not_leak_to_similar_paths():
+    """İstisna çapalıdır — benzeyen bir yol ya da alt yol ondan faydalanamaz."""
+    assert m.classify_mhrs_call("GET", "kurum/randevu/ayni-hekimden-randevu-al") == "write"
+    assert m.classify_mhrs_call("GET", "kurum/randevu/baska-hekimden-randevu-al/{p1}") == "write"
+    # Alt yola sızmamalı:
+    assert m.classify_mhrs_call("GET", "kurum/randevu/ayni-hekimden-randevu-al/1/sil") == "write"
+
+
+def test_verified_read_matches_both_template_and_concrete_path():
+    """Sınıflandırıcı İKİ bağlamda koşar — ikisinde de tutmalı.
+
+    Keşif route ŞABLONU verir (`…/{p1}`), çalışma-zamanı kapısı SOMUT yol
+    (`…/3KNBUGS`). İlk sürüm düz string olarak şablonu tutuyordu: bu testin şablon
+    hâli GEÇİYORDU ama canlı çağrı `WriteNotAllowed` ile patladı. Tek bağlamı
+    sınayan bir test, iki bağlamlı bir fonksiyonu kanıtlamaz.
+    """
+    tpl = "kurum/randevu/ayni-hekimden-randevu-al/{p1}"
+    somut = "kurum/randevu/ayni-hekimden-randevu-al/3KNBUGS"
+    assert m.classify_mhrs_call("GET", tpl) == "read"
+    assert m.classify_mhrs_call("GET", somut) == "read"
 
 
 @pytest.mark.parametrize("method", ["POST", "PUT", "DELETE"])

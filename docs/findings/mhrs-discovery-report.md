@@ -2,7 +2,7 @@
 
 > Otomatik üretildi (`scripts/discover_mhrs.py`). Yalnız public statik JS okunarak çıkarıldı — **kimlik doğrulama YOK, `/api/`'ye istek YOK, PHI YOK**. Ham bundle `docs/findings/raw/mhrs/`'de (gitignored).
 
-**Özet:** build_version: 2.1.405 · chunks_read: 87 · source: kayıtlı bundle (--from-raw) · endpoints: 161 · read: 75 · write: 74 · unknown: 12
+**Özet:** build_version: 2.1.405 · chunks_read: 87 · source: kayıtlı bundle (--from-raw) · endpoints: 161 · read: 76 · write: 73 · unknown: 12
 
 > ⚠️ **Yazma uçları aşağıda LİSTELENİR ama keşif tarayıcısı tarafından ASLA çağrılmaz.** Belgelemek çağırmak değildir. MHRS 12 ucu GET ile yazar (`iptal-et`, `geri-al`, `ayni-hekimden-randevu-al`), bu yüzden HTTP metodu güvenlik sinyali olarak kullanılamaz — sınıflama ad-bazlıdır.
 
@@ -42,7 +42,7 @@
 | DELETE | `kurum/randevu-talep/{p1}` | 🔴 write | chunk-37 |
 | GET | `kurum/randevu-turu/grup` | read | chunk-45 |
 | GET | `kurum/randevu/aksiyon/by-basmak-grubu/{p1}` | unknown | chunk-45 |
-| GET | `kurum/randevu/ayni-hekimden-randevu-al/{p1}` | 🔴 write | chunk-27 |
+| GET | `kurum/randevu/ayni-hekimden-randevu-al/{p1}` | read | chunk-27 |
 | POST | `kurum/randevu/cakisma-okundu` | 🔴 write | chunk-45 |
 | GET | `kurum/randevu/cakisma-onay/{p1}` | 🔴 write | chunk-27 |
 | POST | `kurum/randevu/degisikligi-istisna-okundu` | 🔴 write | chunk-45 |
@@ -170,7 +170,7 @@
 | GET | `yonetim/genel/parametre/degeri/SLOT_LISTELEME_MAX_GUN_WEB` | read | chunk-45 |
 | GET | `yonetim/genel/parametre/degeri/UYE_OL_BUTON_GORUNURLUK` | read | chunk-47 |
 
-## Yazma uçları (74) — tool ÇAĞIRMAZ
+## Yazma uçları (73) — tool ÇAĞIRMAZ
 
 - `POST kurum/kurum/duyuru-kurum/goster`
 - `POST kurum/randevu-notlari`
@@ -182,7 +182,6 @@
 - `GET kurum/randevu-talep/bilgilendir/{p1}`
 - `POST kurum/randevu-talep/yenile/{p1}`
 - `DELETE kurum/randevu-talep/{p1}`
-- `GET kurum/randevu/ayni-hekimden-randevu-al/{p1}`
 - `POST kurum/randevu/cakisma-okundu`
 - `GET kurum/randevu/cakisma-onay/{p1}`
 - `POST kurum/randevu/degisikligi-istisna-okundu`
