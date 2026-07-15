@@ -122,8 +122,13 @@
   Durum · Randevu Türü · (İşlem)**.
 - **Model:** `Appointment{date_time, institution, clinic, location, doctor, status, type}`.
 - **Doğrulama (canlı):** birkaç randevu, tüm alan dolu; durum evreni `Aktif` / `Geçmiş`.
-- **⚠️ Salt-okunur:** `/Randevu/*` aksiyon endpoint'leri (RandevuAl, RandevuIptal…)
-  MEVCUT ama tool **kullanmaz** — sadece listeler.
+- **⚠️ Bu tablo salt-okunur KALIR:** e-Nabız'ın `/Randevu/*` aksiyon uçlarına
+  (`RandevuIptal`, `ManuelRandevuAl`…) hiçbir tool dokunmaz — burası yalnız listeler.
+  Randevu **işlemleri** MHRS'de yapılır (`enabiz_mhrs_book_*` / `_cancel`), ayrı bir
+  sistemde ve iki-adımlı onayla; bkz. `mhrs.md` ve `notes/decisions.md` D7.
+  Tek istisna `/Randevu/RandevuAl`: adı randevu alıyormuş gibi durur ama SSO token'ı
+  basar ve MHRS auth zincirinde kullanılır — yine de yan etkilidir, `discovery.py`
+  denylist'inde ADIYLA durur ve keşif tarayıcısı ona dokunmaz.
 
 ---
 

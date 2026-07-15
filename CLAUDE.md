@@ -17,9 +17,12 @@ Bu dosya *her zaman geçerli* olanı tutar. Adım-adım iş akışları skill'le
      (`RandevuAl`/`ManuelRandevu` dahil) **aynen durur, gevşetilmez**.
    - **MHRS (randevu): YAZMA AÇIK.** Randevu alma/iptal `prd.mhrs.gov.tr` API'sinde,
      `readOnlyHint: False` ve **iki-adımlı onay** ile yapılır: `book_prepare` slotu
-     doğrulayıp `confirm_token` döner (yazmaz), `book_confirm` yazar. Tek adımlı bir
+     doğrulayıp `confirm_token` döner, `book_confirm` randevuyu alır. Tek adımlı bir
      `book(slot_id)` YAZMA — LLM'in uydurduğu slot id kullanıcıya 15 günlük gerçek
-     branş yasağı yazdırır. `api_client(..., allow_write=True)` açık niyet beyanıdır.
+     branş yasağı yazdırır. `randevu-ekle` gövdesi tool argümanından DEĞİL, sunucunun
+     doğruladığı slottan kurulur. `api_client(..., allow_write=True)` açık niyet
+     beyanıdır. `book_prepare` randevu almaz ama **`readOnlyHint: True` DEĞİL** —
+     MHRS o çağrıda slotu kilitliyor; vazgeçince `book_cancel_prepare` bırakır.
    - Durum değiştiren tool'lar: `enabiz_login_start` (SMS), `enabiz_login_verify`
      (oturum) + MHRS randevu yazma tool'ları. Başka hiçbiri.
 2. **Sessiz yanlış-eşleme, boş sonuçtan KÖTÜDÜR.** Beklenen tablo id'si yoksa `[]` dön.

@@ -31,7 +31,9 @@ prefix'leridir: `vatandas/`, `kurum/`, `yonetim/`.
 
 Canlı doğrulama (2026-07-15): statik varlıklarda WAF/geo-block yok, hepsi 200.
 0..90 taramasında **87 chunk** bulundu (44, 88, 89, 90 yok) → 44'teki boşluk
-taramayı durdurmamalı. **151 benzersiz uç**: read 71 · write 68 · unknown 12.
+taramayı durdurmamalı. **161 benzersiz uç**: read 75 · write 74 · unknown 12.
+(İlk tur 151 buldu ve eksiksiz GÖRÜNÜYORDU — `kurum-rss/` prefix'i ve baştan
+slash'lı yollar allowlist'ten düşüyordu; bkz. "Keşfin iki kör noktası".)
 
 ## Auth zinciri — e-Nabız SSO devri
 
@@ -104,7 +106,9 @@ cookie'sinde tutar.
 
 ### JWT
 
-- Ömür **20 saat** (iat→exp = 72000 s). Tek gözlemden; doğrulanmadı.
+- `exp` alanı **20 saat** der (iat→exp = 72000 s) — ama bu ÖMÜR DEĞİLDİR.
+  Canlıda ölçüldü: token 19.6 saat "geçerli" görünürken sunucu 401 verdi.
+  Bkz. "JWT `exp`'i GÜVENİLİR DEĞİL".
 - `refreshToken: null` → yenileme yok; süre dolunca zincir baştan koşar.
 - `session_alive()` (HTML'de `TCKimlikNo` arar) burada **anlamsızdır** — canlılık
   JWT `exp` (yerel) + 401/`LGN1004` (canlı) ile ölçülür.
@@ -137,7 +141,7 @@ Tüm uçlar aynı zarfı döner:
 | `GNL1009` | İşlem başarılı | — |
 | `RNDS1010` | **Aşırı sorgu → reCAPTCHA.** ✅ bundle'da doğrulandı (17 çağrı yeri) | **Retry YOK.** Ayrıntı aşağıda. |
 | `RNDS1000` | **Anti-bot kilidi (⚠️ DOĞRULANMADI).** "Hayatın olağan akışına aykırı şekilde çok fazla randevu sorgulaması yaptınız… Alo 182'yi arayınız" | **Retry YOK — sert dur.** Ayrıntı aşağıda. |
-| `LGN2001` | Oturum başka cihazdan sonlandırıldı | MHRS **tek aktif oturum** tutuyor gibi → programatik login kullanıcının telefondaki oturumunu düşürebilir. Doğrulanmadı. |
+| `LGN2001` | Oturum başka cihazdan sonlandırıldı | MHRS **tek aktif oturum** tutar — ✅ canlıda gözlendi, ama BEKLENENİN TERSİ yönde: kullanıcının tarayıcıdan girişi BİZİM token'ı öldürdü. Bkz. aşağısı. |
 | `LGN1004` | Oturum süresi doldu | Zinciri baştan koştur. |
 
 ### ⚠️ JWT `exp`'i GÜVENİLİR DEĞİL — tek oturum (canlıda ölçüldü)

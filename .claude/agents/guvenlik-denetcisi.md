@@ -27,10 +27,20 @@ sunucusudur; iki risk sınıfını birden ararsın.
 - Loglara/print'e düşen PHI, gövde metni, ya da 800+ karakter ham yanıt.
 
 ### B) Salt-okunur / invaryant ihlali
-- Yeni **yazma/mutasyon ucu** çağrısı: `/Sil`, `/Kaydet`, `/Iptal`, `/Ekle`, `/Duzenle`,
-  randevu al/iptal — ya da `discovery.py` `_WRITE_TOKENS`'a takılması gereken bir uç.
-- Eksik/yanlış `readOnlyHint`: yeni veri tool'u `False` işaretlenmiş (yalnız login
-  tool'ları `False` olur), ya da yan etkisiz tool işaretsiz bırakılmış.
+- **e-Nabız'da** yeni yazma/mutasyon ucu çağrısı: `/Sil`, `/Kaydet`, `/Iptal`, `/Ekle`,
+  `/Duzenle` — ya da `discovery.py` `_WRITE_TOKENS`'a takılması gereken bir uç.
+  E-Nabız SAĞLIK VERİSİ salt-okunurdur ve öyle kalır.
+- **MHRS randevu yazması artık İHLAL DEĞİL** (D7) — ama şunları kontrol et:
+  - Yazma tool'u `readOnlyHint: False` mı? (`book_prepare` dahil — slotu kilitliyor.)
+  - Tek adımlı `book(slot_id)` eklenmiş mi? **Yasak.** `book_prepare` → `confirm_token`
+    → `book_confirm` deseni korunmalı; token süreç belleğinde, diske/LLM'e gitmez.
+  - `randevu-ekle` gövdesi SUNUCUNUN doğruladığı slottan mı kuruluyor, yoksa tool
+    argümanından mı? Argümandan kurulursa model uydurma id ile randevu yazabilir.
+  - `enabiz_mhrs_cancel` `confirm=True` istiyor mu?
+  - `api_client(..., allow_write=True)` yalnız randevu yazma yollarında mı?
+- Eksik/yanlış `readOnlyHint`: yeni **e-Nabız veri tool'u** `False` işaretlenmiş
+  (`False` olanlar: 2 login + 4 MHRS randevu tool'u), ya da yan etkili tool `True`
+  işaretlenmiş.
 - Geri gelmiş **`select_one("#id") or soup.find("table")`** fallback'i (yasak; `a074eee`).
 - `table.select("tbody tr")` kullanımı (`_rows()` olmalı).
 - Değer alanının `int`/`float`/`bool`/`date`'e çevrilmesi (hepsi `str` kalmalı).
