@@ -119,6 +119,13 @@ def register(mcp: FastMCP) -> None:
         Her randevu `hrn` (hasta randevu numarası) taşır; iptal için gereken
         anahtar budur ve e-Nabız'ın HTML tablosunda bulunmaz.
 
+        ⚠️ **`kayit_durumu`'na bakın — liste İPTAL EDİLMİŞ randevuları da içerir.**
+        MHRS iptal edilen randevuyu listeden silmez, `kayit_durumu: "Geri Alınabilir"`
+        durumuna alır (bir süre `geri-al` ile döndürülebilir). `"Normal"` = gerçekten
+        aktif randevu. Canlıda ölçüldü: iptal sonrası `hrn` listede KALIR, yalnız
+        durumu ve `iptal_edilebilir` değişir. Sadece `hrn` varlığına bakan bir kontrol
+        iptali "başarısız" sanar.
+
         Bu tool randevu ALMAZ ve İPTAL ETMEZ. Kimlikli oturum gerektirir.
 
         - `limit`: en fazla kaç kayıt (varsayılan 50; `0` = sınırsız).

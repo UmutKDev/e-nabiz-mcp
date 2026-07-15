@@ -205,6 +205,81 @@ def test_slot_search_paths_are_classified_read(path):
     assert classify_mhrs_call("POST", path) == "read"
 
 
+# --------------------------------------------------------------------------- #
+# Slot ağacı — CANLI yakalanan derinlik hatası
+# --------------------------------------------------------------------------- #
+#: Canlı yanıtın GERÇEK şekli (sentetik değerlerle). Kritik nokta: `saatSlotList[]`
+#: bir SAAT GRUBUdur, slot DEĞİL — asıl slotlar onun `slotList[]`'indedir.
+_GUN_RAW = {
+    "gun": "2030-01-01",
+    "hekimSlotList": [
+        {
+            "hekim": {"ad": "AYŞE", "soyad": "YILMAZ", "mhrsHekimId": 1234},
+            "klinik": {"lcetvelTipi": 1},
+            "muayeneYeriSlotList": [
+                {
+                    "muayeneYeri": {"adi": "SENTETİK Pol. 1"},
+                    "saatSlotList": [
+                        {
+                            "saat": "09:00:00",
+                            "saatStr": "09:00",
+                            "bos": True,
+                            "slotList": [
+                                {
+                                    "id": 111,
+                                    "bos": True,
+                                    "ek": False,
+                                    "isKurali": False,
+                                    "slot": {"id": 111},
+                                    "baslangicZamanStr": {"saat": "09:00", "tarih": "01.01.2030"},
+                                },
+                                {
+                                    "id": 112,
+                                    "bos": False,
+                                    "ek": False,
+                                    "isKurali": False,
+                                    "slot": {"id": 112},
+                                    "baslangicZamanStr": {"saat": "09:15", "tarih": "01.01.2030"},
+                                },
+                            ],
+                        }
+                    ],
+                    "saatSlotListEk": [],
+                }
+            ],
+        }
+    ],
+}
+
+
+def test_gun_descends_into_slotlist_not_saatslotlist():
+    """Slotlar `saatSlotList[].slotList[]` içindedir — bir kat DAHA derin.
+
+    CANLIDA yakalanan hata: parser `saatSlotList` girdilerinde `.slot` arıyordu; orada
+    yok, bir alt katta. Sonuç: her slot eleniyor ve "0 boş saat" görünüyordu — yani
+    DOLU bir hastane ile BOZUK bir parser ayırt edilemez hâle gelmişti. Gerçekte o
+    aramada 135 ve 322 alınabilir slot vardı.
+    """
+    g = msl._gun(_GUN_RAW)
+    saatler = g["hekimler"][0]["saatler"]
+    assert [s["slot_id"] for s in saatler] == ["111", "112"]
+    assert saatler[0]["saat"] == "09:00"
+    assert saatler[0]["bos"] == "True"
+    assert saatler[1]["bos"] == "False"
+
+
+def test_gun_keeps_hekim_and_muayene_yeri():
+    g = msl._gun(_GUN_RAW)
+    assert g["hekimler"][0]["hekim"] == "AYŞE YILMAZ"
+    assert g["hekimler"][0]["saatler"][0]["muayene_yeri"] == "SENTETİK Pol. 1"
+
+
+def test_gun_returns_empty_on_unexpected_shape():
+    assert msl._gun({"gun": "2030-01-01"})["hekimler"] == []
+    assert msl._gun(None) is None
+    assert msl._gun({"hekimSlotList": []}) is None  # `gun` yoksa gün değildir
+
+
 def test_slot_id_helper_keeps_zero_distinct_from_sentinel():
     """`0` sentinel'e (`-1`) düşmemeli — MHRS'nin kendi bundle'ındaki hata bu."""
     assert msl._id("0") == 0

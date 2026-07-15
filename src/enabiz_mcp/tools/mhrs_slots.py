@@ -63,20 +63,47 @@ def _id(value: str | None) -> int:
 
 
 def _saat(raw: Any) -> dict | None:
-    """Tek bir saat slotunu indirger. `slot.id` `book_prepare`'in anahtarıdır."""
+    """Tek bir SLOT'u indirger — `saatSlotList` girdisini DEĞİL, onun içindeki
+    `slotList[]` girdisini alır.
+
+    Hiyerarşi bir kat daha derin ve bu canlıda ölçüldü:
+
+        muayeneYeriSlotList[]
+          └─ saatSlotList[]        ← SAAT GRUBU (09:00), slot DEĞİL
+               └─ slotList[]       ← asıl randevu slotları (09:00, 09:15, 09:30…)
+
+    Parser bir tur `saatSlotList` girdilerinde `.slot` arıyordu; orada yok, bir alt
+    katta. Sonuç: her slot eleniyor ve "0 boş saat" görünüyordu — dolu bir hastane
+    ile boş bir parser AYIRT EDİLEMEZ hâle gelmişti. Bundle da bunu söylüyormuş:
+    `createElement(H, {saatSlotList: r.slotList})` — İÇ listeyi geçiyor.
+
+    `bos` slot seviyesindedir; saat grubunun `bos`'u "bu saatte hiç yer var mı"dır.
+    """
     if not isinstance(raw, dict):
         return None
-    slot = raw.get("slot") if isinstance(raw.get("slot"), dict) else {}
-    sid = slot.get("id")
+    sid = raw.get("id")
     if sid is None:
         return None
-    return {
+    bas = raw.get("baslangicZamanStr")
+    bas = bas if isinstance(bas, dict) else {}
+    out = {
         "slot_id": str(sid),
-        "saat": str(raw["saatStr"]) if raw.get("saatStr") is not None else None,
+        "saat": str(bas["saat"]) if bas.get("saat") else None,
+        "tarih": str(bas["tarih"]) if bas.get("tarih") else None,
         "bos": str(raw["bos"]) if raw.get("bos") is not None else None,
         # `ek` = fazla mesai slotu (bundle'da ayrı liste: saatSlotListEk).
         "ek": str(raw["ek"]) if raw.get("ek") is not None else None,
+        # `isKurali` = yaş/cinsiyet iş kuralı engeli; True ise slot alınamaz.
+        "is_kurali": str(raw["isKurali"]) if raw.get("isKurali") is not None else None,
     }
+    return {k: v for k, v in out.items() if v is not None}
+
+
+def _saat_grubu(raw: Any) -> list[dict]:
+    """Bir saat grubunun (`saatSlotList` girdisi) içindeki slotları döndürür."""
+    if not isinstance(raw, dict):
+        return []
+    return [s for s in (_saat(x) for x in raw.get("slotList") or []) if s]
 
 
 def _gun(raw: Any) -> dict | None:
@@ -95,17 +122,17 @@ def _gun(raw: Any) -> dict | None:
         for my in h.get("muayeneYeriSlotList") or []:
             if not isinstance(my, dict):
                 continue
+            yer = (
+                str(my["muayeneYeri"]["adi"])
+                if isinstance(my.get("muayeneYeri"), dict) and my["muayeneYeri"].get("adi")
+                else None
+            )
             # `saatSlotListEk` ayrı bir liste — fazla mesai slotları. İkisi de gerçek
             # randevu saatidir; bundle da ikisini birleştiriyor (`.concat`).
-            for s in (my.get("saatSlotList") or []) + (my.get("saatSlotListEk") or []):
-                item = _saat(s)
-                if item:
-                    item["muayene_yeri"] = (
-                        str(my["muayeneYeri"]["adi"])
-                        if isinstance(my.get("muayeneYeri"), dict)
-                        and my["muayeneYeri"].get("adi")
-                        else None
-                    )
+            for grup in (my.get("saatSlotList") or []) + (my.get("saatSlotListEk") or []):
+                for item in _saat_grubu(grup):
+                    if yer:
+                        item["muayene_yeri"] = yer
                     saatler.append(item)
         if saatler or ad:
             hekimler.append(

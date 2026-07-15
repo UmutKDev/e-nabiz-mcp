@@ -294,7 +294,29 @@ Canlı ölçümler: il **85** kayıt (81 değil — MHRS İstanbul'u ANADOLU/AVR
 `children` ile bölüyor), klinik 80. `randevuBaslangicZamaniStr` beklenen
 `{tarih, gun, saat, zaman}`'ın yanında `date`, `gunAyGunIsmi`, `tarihAy` da taşıyor.
 
-Slot uçlarının (`kurum-rss/...`) gövde şekli HÂLÂ canlı doğrulanmadı — Faz 2b.
+**Faz 2b/3 de canlı doğrulandı** (Bursa Şehir Hastanesi / Dahiliye, randevu alındı ve
+iptal edildi). Üç bulgu:
+
+**1. Slot ağacı bir kat daha derin.** `saatSlotList[]` bir SAAT GRUBUdur, slot değil;
+asıl slotlar onun `slotList[]`'indedir:
+
+```
+muayeneYeriSlotList[] → saatSlotList[] (09:00 grubu) → slotList[] (09:00, 09:15, …)
+```
+
+Parser `saatSlotList` girdilerinde `.slot` arıyordu → hepsi eleniyor → **"0 boş saat"**.
+Yani DOLU bir hastane ile BOZUK bir parser ayırt edilemiyordu; gerçekte o aramada 135
+ve 322 alınabilir slot vardı. Bundle bunu söylüyormuş: `createElement(H, {saatSlotList:
+r.slotList})` — İÇ listeyi geçiyor.
+
+**2. İptal randevuyu listeden SİLMEZ.** `iptal-et` sonrası `hrn` `aktifRandevuDtoList`'te
+KALIR; değişen `kayit_durumu`: `Normal` → **`Geri Alınabilir`** (bir süre `geri-al` ile
+döndürülebilir) ve `iptal_edilebilir: True → False`. İkinci iptal denemesi
+`RNDI1004 "Randevunun durumu iptal edilebilmesine uygun değildir"` döner. Sadece `hrn`
+varlığına bakan bir doğrulama iptali "başarısız" sanar — nitekim öyle sanıldı.
+
+**3. `randevu-ekle` başarıyla döner ama yanıtta `hrn` YOK.** Randevu gerçekten alınır
+(`hrn` listede görünür), ama numarayı öğrenmek için `yaklasan-randevularim` gerekir.
 
 **`POST kurum-rss/randevu/slot-sorgulama/slot`** — gövde:
 `aksiyonId, mhrsKurumId, mhrsKlinikId, mhrsHekimId, mhrsIlId, mhrsIlceId,

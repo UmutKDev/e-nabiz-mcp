@@ -161,10 +161,18 @@ def register(mcp: FastMCP) -> None:
         with api_client(cfg, session.jwt, allow_write=True) as client:
             data = unwrap(client.post(BOOK_PATH, json=body))
         out = {"booked": True}
-        if isinstance(data, dict):
-            hrn = _text(data.get("hastaRandevuNumarasi"))
-            if hrn:
-                out["hrn"] = hrn
+        hrn = _text(data.get("hastaRandevuNumarasi")) if isinstance(data, dict) else None
+        if hrn:
+            out["hrn"] = hrn
+        else:
+            # Canlıda ölçüldü: randevu-ekle BAŞARIYLA döndü ama yanıtta hrn yoktu
+            # (randevu gerçekten alındı — `hrn` listede göründü). İptal `hrn` ister,
+            # o yüzden modeli oraya yönlendir; uydurma bir numara üretmektense
+            # nereden alacağını söyle.
+            out["hint"] = (
+                "Randevu alındı ama sunucu yanıtında hasta randevu numarası (hrn) yok. "
+                "İptal için gerekirse enabiz_mhrs_list_upcoming ile hrn'i alın."
+            )
         return out
 
     @mcp.tool(annotations={"readOnlyHint": False, "openWorldHint": True})
